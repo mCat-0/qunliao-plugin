@@ -67,17 +67,15 @@ function safeColor (v, def) {
   return def
 }
 
-function buildGlassStyle (moduleKey) {
-  const enabled = getBoolean(moduleKey, 'glassEnabled', true)
-  const blur = clamp(getNumber(moduleKey, 'glassBlur', 14), 0, 60, 14)
-  const sat = clamp(getNumber(moduleKey, 'glassSaturate', 140), 0, 300, 140)
-  const opacity = clamp(getNumber(moduleKey, 'glassOpacity', 0.35), 0, 1, 0.35)
-  const border = safeColor(getString(moduleKey, 'glassBorder', ''), 'rgba(255,255,255,0.18)')
-  const radius = clamp(getNumber(moduleKey, 'glassRadius', 16), 0, 48, 16)
-  if (!enabled) {
-    return `:root{--glass-bg:rgba(0,0,0,${opacity.toFixed(3)});--glass-border:${border};--glass-radius:${radius}px;--glass-filter:none;}`
+function buildGlassVars (moduleKey) {
+  return {
+    glassEnabled: getBoolean(moduleKey, 'glassEnabled', true),
+    glassBlur: clamp(getNumber(moduleKey, 'glassBlur', 14), 0, 60, 14),
+    glassSaturate: clamp(getNumber(moduleKey, 'glassSaturate', 140), 0, 300, 140),
+    glassOpacity: clamp(getNumber(moduleKey, 'glassOpacity', 0.35), 0, 1, 0.35).toFixed(3),
+    glassBorder: safeColor(getString(moduleKey, 'glassBorder', ''), 'rgba(255,255,255,0.18)'),
+    glassRadius: clamp(getNumber(moduleKey, 'glassRadius', 16), 0, 48, 16)
   }
-  return `:root{--glass-bg:rgba(0,0,0,${opacity.toFixed(3)});--glass-border:${border};--glass-radius:${radius}px;--glass-filter:blur(${blur}px) saturate(${sat}%);}`
 }
 
 function buildBgUrl () {
@@ -280,13 +278,15 @@ export class HotSearch extends plugin {
         hotValue: item.hot_value ? formatHot(item.hot_value) : ''
       }))
 
-      const viewData = {
-        platformName: PLATFORM_NAME[type] || type,
-        updateTime: json.update_time ? String(json.update_time).trim() : '实时',
-        cover: buildBgUrl(),
-        list: list,
-        glassStyle: buildGlassStyle(_MODULE_KEY)
-      }
+      const viewData = Object.assign(
+        {
+          platformName: PLATFORM_NAME[type] || type,
+          updateTime: json.update_time ? String(json.update_time).trim() : '实时',
+          cover: buildBgUrl(),
+          list: list
+        },
+        buildGlassVars(_MODULE_KEY)
+      )
 
       const img = await renderImage(viewData)
       if (!img) return this.reply('图片渲染失败，请稍后再试')

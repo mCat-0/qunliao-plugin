@@ -3,17 +3,23 @@
   <head>
     <meta http-equiv="content-type" content="text/html;charset=utf-8" />
     <link rel="stylesheet" type="text/css" href="{{pluResPath}}html/hotSearch/hotSearch.css" />
-    <style>{{data.glassStyle}</style>
   </head>
   <body>
-    <div class="container" id="container">
+    <div
+      class="container"
+      id="container"
+      data-glass-enabled="{{data.glassEnabled}}"
+      data-glass-blur="{{data.glassBlur}}"
+      data-glass-saturate="{{data.glassSaturate}}"
+      data-glass-opacity="{{data.glassOpacity}}"
+      data-glass-border="{{data.glassBorder}}"
+      data-glass-radius="{{data.glassRadius}}"
+    >
       <div class="bg" id="bgBox">
         <img
           src="{{data.cover}}"
           class="bg-img"
           id="bgImg"
-          onload="this.classList.add('loaded'); window.__H5Loaded = true; document.dispatchEvent(new Event('bg-ready')); try { document.getElementById('bgImg').classList.add('loaded'); } catch(e){}"
-          onerror="this.parentNode.classList.add('no-bg'); window.__H5Loaded = true;"
         />
         <div class="bg-mask"></div>
       </div>
@@ -39,22 +45,56 @@
         <span>数据来源：uapis.cn · mCat 群聊插件</span>
       </div>
     </div>
+
+    <!-- 毛玻璃参数：从 data-* 读纯值，由脚本写入 :root CSS 变量
+         —— 这样可避免模板引擎把 CSS 花括号误认为模板语法 -->
     <script>
-      // 如果图片来自 data:image 等，onload 未必触发。统一设置一个保底时间点。
       (function () {
+        window.__H5Loaded = false;
+        var box = document.getElementById('container');
+        if (box) {
+          var enabled = box.getAttribute('data-glass-enabled') === 'true';
+          var blur = parseFloat(box.getAttribute('data-glass-blur')) || 0;
+          var sat = parseFloat(box.getAttribute('data-glass-saturate')) || 100;
+          var op = parseFloat(box.getAttribute('data-glass-opacity')) || 0.35;
+          var border = box.getAttribute('data-glass-border') || 'rgba(255,255,255,0.18)';
+          var radius = parseFloat(box.getAttribute('data-glass-radius')) || 16;
+          var bgValue = 'rgba(0,0,0,' + op.toFixed(3) + ')';
+          var filterValue = enabled ? ('blur(' + blur + 'px) saturate(' + sat + '%)') : 'none';
+          var cssText =
+            ':root{--glass-bg:' + bgValue +
+            ';--glass-border:' + border +
+            ';--glass-radius:' + radius + 'px' +
+            ';--glass-filter:' + filterValue +
+            ';}';
+          var styleNode = document.createElement('style');
+          styleNode.appendChild(document.createTextNode(cssText));
+          document.head.appendChild(styleNode);
+        }
         function markReady () {
           if (window.__H5Loaded) return;
           window.__H5Loaded = true;
-          document.getElementById('container').classList.add('h5-loaded');
+          if (box) box.classList.add('h5-loaded');
         }
         var img = document.getElementById('bgImg');
-        if (img && img.complete) {
+        if (img) {
+          if (img.complete) {
+            img.classList.add('loaded');
+            markReady();
+          } else {
+            img.addEventListener('load', function () {
+              img.classList.add('loaded');
+              markReady();
+            }, { once: true });
+            img.addEventListener('error', function () {
+              var bgBox = document.getElementById('bgBox');
+              if (bgBox) bgBox.classList.add('no-bg');
+              markReady();
+            }, { once: true });
+          }
+        } else {
           markReady();
-        } else if (img) {
-          img.addEventListener('load', markReady, { once: true });
-          img.addEventListener('error', markReady, { once: true });
         }
-        // 无论图片 onload 失败，兜底 2s 后强制标记，避免永远挂起
         setTimeout(markReady, 2000);
       })();
     </script>
