@@ -249,16 +249,14 @@ export class Weather extends plugin {
       }
       const curT = isReasonableTemp(c.temp) ? c.temp : null
       const minT = isReasonableTemp(d.tempn) ? d.tempn : null
-      const maxT = isReasonableTemp(d.temp) ? d.temp : null
 
       const viewData = Object.assign(
         {
           city: d.city || city,
           date: c.date || d.date || '',
           time: c.time || d.time || '',
-          currentTemp: curT || minT || maxT || '?',
-          minTemp: minT || maxT || curT || '?',
-          maxTemp: maxT || minT || curT || '?',
+          currentTemp: curT || minT || '?',
+          minTemp: minT || curT || '?',
           currentWeather: c.weather || d.weather || '',
           wind: c.wind || d.wind || '',
           humidity: c.humidity || '',
