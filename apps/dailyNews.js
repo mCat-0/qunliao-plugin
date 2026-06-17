@@ -4,11 +4,15 @@ import cfg from '../../../lib/config/config.js'
 import { segment } from 'oicq'
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import common from '../../../lib/common/common.js'
 import { getModuleConfig, getString, getNumber, isGroupAllowed, isModuleEnabled, httpFetch } from '../components/ModuleHelper.js'
 
 const _MODULE_KEY = 'dailyNews'
 const _path = process.cwd().replace(/\\/g, '/')
+
+const __filename = fileURLToPath(import.meta.url)
+const APPS_DIR = path.dirname(__filename).replace(/\\/g, '/')
 
 const CACHE_DIR = path.join(process.cwd().replace(/\\/g, '/'), 'data', 'cache', 'dailyNews')
 
@@ -239,6 +243,7 @@ async function renderNewsImage (data) {
   // 支持：example/qunliao-plugin、qunliao-plugin、example/resources
   // ============================================================
   const candidateDirs = [
+    path.resolve(APPS_DIR, '..').replace(/\\/g, '/') + '/resources',
     `${_path}/plugins/example/qunliao-plugin/resources`,
     `${_path}/plugins/qunliao-plugin/resources`,
     `${_path}/plugins/example/resources`,

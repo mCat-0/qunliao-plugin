@@ -1,6 +1,6 @@
-# QunLiao Plugin · 群聊插件
+﻿# QunLiao Plugin · 群聊插件
 
-> 一个集成化的 Yunzai-Bot 插件，将 11 个常用群聊功能一站式整合。适配锅巴面板，所有功能均可使用锅巴面板进行全部配置，配置立即生效
+> 一个集成化的 Yunzai-Bot 插件，将 12 个常用群聊功能一站式整合。适配锅巴面板，所有功能均可使用锅巴面板进行全部配置，配置立即生效
 
 ***
 
@@ -78,7 +78,7 @@ git clone https://gitlab.com/mCat0/qunliao-plugin.git ./plugins/Qunliao-plugin/
 
 ```
 [qunliao-plugin] loading QunLiao-PLUGIN
-[qunliao-plugin] QunLiao-PLUGIN loaded successfully (11 modules)
+[qunliao-plugin] QunLiao-PLUGIN loaded successfully (12 modules)
 ```
 
 然后在群聊里试一下：
@@ -100,7 +100,7 @@ qunliao-plugin/
 ├── README.md             ═════▶ 本文档
 ├── guoba.support.js      ═════▶ 锅巴面板支持（可视化配置）
 │
-├── apps/                 ═════▶ 功能模块（11 个）
+├── apps/                 ═════▶ 功能模块（12 个）
 │   ├── dailyNews.js              ← 每日早报（定时推送 + 图片渲染 + 缓存）
 │   ├── goodNight.js              ← 早安/晚安问候（含 8 小时禁言）
 │   ├── hotSearch.js              ← 多平台热搜
@@ -111,7 +111,8 @@ qunliao-plugin/
 │   ├── KFCV50.js                 ← KFC 疯狂星期四
 │   ├── historyToday.js           ← 历史上的今天
 │   ├── marriageCertificate.js    ← 结婚证生成器
-│   └── help.js                   ← 群聊帮助（指令列表图片）
+│   ├── help.js                   ← 群聊帮助（指令列表图片）
+│   └── update.js                 ← 在线更新/修复（管理员专用）
 │
 ├── components/           ═════▶ 公共组件
 │   ├── Config.js              ← 配置加载器
@@ -148,6 +149,7 @@ qunliao-plugin/
 | 9  | 📜 历史上的今天    | `historyToday.js`        | `#历史上的今天`                                                      | 查询历史上今日事件                             |
 | 10 | 💍 结婚证生成器    | `marriageCertificate.js` | `我要和XXX结婚` / `我和XXX结婚了`                                        | 生成结婚证图片，支持 @ 对象或直接输入                  |
 | 11 | 📋 群聊帮助      | `help.js`                | `#群聊帮助` / `#mcat群聊帮助`                                          | 列出本插件所有指令，生成双列图片                      |
+| 12 | 🔄 在线更新      | `update.js`              | `#更新群聊插件` / `#修复群聊插件`                                           | 从 Git 仓库自动获取最新版本（支持 GitHub / Gitee / GitLab 自动回退），仅管理员可用 |
 
 ***
 
@@ -187,7 +189,7 @@ dujitang:
 
 1. 浏览器访问锅巴面板
 2. 在插件列表找到 **QunLiao Plugin**
-3. 一键开关模块、设置白名单、更换 API 地址
+3. 一键开关模块、设置白名单、更换 API 地址、配置更新仓库源
 
 </details>
 

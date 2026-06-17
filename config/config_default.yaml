@@ -202,3 +202,27 @@ help:
   bgLocalPath: ""
   # 生效的群列表，留空则所有群生效
   onlyGroupID: []
+
+# ------------------------------------------------------------
+# 在线更新 Update / Repair
+# ------------------------------------------------------------
+update:
+  # 是否启用模块（仅管理员可用）
+  enabled: true
+  # 默认拉取平台：github / gitee / gitlab
+  defaultPlatform: "gitlab"
+  # GitHub 分支
+  githubBranch: "main"
+  # GitHub 加速代理（如 https://ghproxy.com/，留空则直连）
+  githubProxy: ""
+  # Gitee 分支
+  giteeBranch: "main"
+  # Gitee 账号密码（当 Gitee 要求登录时使用；留空则匿名访问）
+  giteeUsername: ""
+  giteePassword: ""
+  # GitLab 分支
+  gitlabBranch: "main"
+  # 额外管理员 QQ（除 Yunzai 内置 master 之外，允许使用更新指令）
+  extraAdminQQ: []
+  # 生效的群列表，留空则所有群生效
+  onlyGroupID: []

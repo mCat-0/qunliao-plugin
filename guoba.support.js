@@ -741,6 +741,104 @@ export function supportGuoba() {
             mode: "multiple",
             options: groupOptions
           }
+        },
+
+        // ============================================================
+        // 插件更新 Update / Repair
+        // ============================================================
+        {
+          label: '插件更新',
+          component: 'SOFT_GROUP_BEGIN'
+        },
+        {
+          component: "Divider",
+          label: "插件更新（管理员）",
+          componentProps: { orientation: "left", plain: true }
+        },
+        {
+          field: "update.enabled",
+          label: "启用「插件更新」",
+          bottomHelpMessage: "启用后，管理员可使用 #更新群聊插件 / #修复群聊插件 指令",
+          component: "Switch"
+        },
+        {
+          field: "update.defaultPlatform",
+          label: "默认拉取平台",
+          bottomHelpMessage: "优先从该平台拉取文件，失败时自动回退到其他平台",
+          component: "Select",
+          componentProps: {
+            options: [
+              { label: "GitLab（推荐）", value: "gitlab" },
+              { label: "Gitee（国内速度快）", value: "gitee" },
+              { label: "GitHub（可能需要代理加速）", value: "github" }
+            ]
+          }
+        },
+        {
+          field: "update.githubBranch",
+          label: "GitHub 分支",
+          bottomHelpMessage: "默认 main",
+          component: "Input",
+          componentProps: { placeholder: "main" }
+        },
+        {
+          field: "update.githubProxy",
+          label: "GitHub 代理地址",
+          bottomHelpMessage: "可加速 GitHub 访问，如 https://ghproxy.com/，留空则直连",
+          component: "Input",
+          componentProps: { placeholder: "如 https://ghproxy.com/ 或留空" }
+        },
+        {
+          field: "update.giteeBranch",
+          label: "Gitee 分支",
+          bottomHelpMessage: "默认 main",
+          component: "Input",
+          componentProps: { placeholder: "main" }
+        },
+        {
+          field: "update.giteeUsername",
+          label: "Gitee 账号",
+          bottomHelpMessage: "当 Gitee API 要求登录时使用；留空则匿名访问",
+          component: "Input",
+          componentProps: { placeholder: "留空或填 Gitee 用户名" }
+        },
+        {
+          field: "update.giteePassword",
+          label: "Gitee 密码",
+          bottomHelpMessage: "配合 Gitee 账号使用；留空则匿名访问",
+          component: "Input",
+          componentProps: { placeholder: "留空或填 Gitee 密码", type: "password" }
+        },
+        {
+          field: "update.gitlabBranch",
+          label: "GitLab 分支",
+          bottomHelpMessage: "默认 main",
+          component: "Input",
+          componentProps: { placeholder: "main" }
+        },
+        {
+          field: "update.extraAdminQQ",
+          label: "额外管理员 QQ",
+          bottomHelpMessage: "除 Yunzai 内置 master 外，允许使用更新指令的 QQ 号。留空则只有 Bot 主人可用",
+          component: "Select",
+          componentProps: {
+            allowAdd: true,
+            allowDel: true,
+            mode: "multiple",
+            options: []
+          }
+        },
+        {
+          field: "update.onlyGroupID",
+          label: "白名单群",
+          bottomHelpMessage: "仅在这些群生效，留空则所有群均生效",
+          component: "Select",
+          componentProps: {
+            allowAdd: true,
+            allowDel: true,
+            mode: "multiple",
+            options: groupOptions
+          }
         }
       ],
 

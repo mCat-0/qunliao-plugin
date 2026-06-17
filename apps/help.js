@@ -139,6 +139,14 @@ function getAllCommands () {
       commands: [
         { cmd: '#群聊帮助 / #mCat群聊帮助', desc: '查看插件指令' }
       ]
+    },
+    {
+      moduleName: '在线更新',
+      hasAdmin: true,
+      commands: [
+        { cmd: '#更新群聊插件', desc: '从仓库获取最新版本，保留用户配置', admin: true },
+        { cmd: '#修复群聊插件', desc: '从仓库获取全部文件，强制覆盖并清除用户配置', admin: true }
+      ]
     }
   ]
 }
@@ -187,7 +195,10 @@ async function getBackgroundImage () {
 async function renderHelpImage () {
   ensureCacheDir()
 
+  const __pluginRoot = path.resolve(APPS_DIR, '..').replace(/\\/g, '/')
+
   const candidateDirs = [
+    `${__pluginRoot}/resources`,
     `${_path}/plugins/example/qunliao-plugin/resources`,
     `${_path}/plugins/qunliao-plugin/resources`,
     `${_path}/plugins/example/resources`,
@@ -214,7 +225,13 @@ async function renderHelpImage () {
   const bg = await getBackgroundImage()
 
   // 获取指令列表（静态详细清单）
-  const modules = getAllCommands()
+  // 排序：普通模块(hasAdmin=false) 在前，含管理员指令的模块挨在一起
+  const rawModules = getAllCommands()
+  const modules = [...rawModules].sort((a, b) => {
+    const aScore = a.hasAdmin ? 1 : 0
+    const bScore = b.hasAdmin ? 1 : 0
+    return aScore - bScore
+  })
 
   const data = {
     title: getTitle(),
