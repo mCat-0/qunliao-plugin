@@ -279,7 +279,44 @@ export class GoodNight extends plugin {
     if (!isModuleEnabled(_MODULE_KEY)) return false
     if (!isGroupAllowed(e, _MODULE_KEY)) return false
 
-    const text = (e.msg || e.raw_message || e.message || '').trim()
+    let text = (e.msg || e.raw_message || e.message || '').trim()
+
+    // 从图片消息中抽取 summary（表情包自带的文字标签）
+    // 例如：[CQ:image,summary=&#91;早&#93;,file=...gif,...]
+    //       [CQ:image,summary=早上好呀,file=...]
+    // 把它拼进 text，以便下方的关键词/单字检测都能命中
+    const imageSummaries = []
+    try {
+      const raw = e.raw_message || ''
+      const re = /summary=([^,\]]*)/gi
+      let m
+      while ((m = re.exec(raw)) !== null) {
+        try {
+          // &#91; -> [  &#93; -> ]，做一次简单的 HTML 实体解码
+          const dec = decodeURIComponent(
+            (m[1] || '')
+              .replace(/&#(\d+);/g, (_, $1) => String.fromCharCode(Number($1)))
+          )
+          if (dec) imageSummaries.push(dec)
+        } catch (_) {
+          if (m[1]) imageSummaries.push(m[1])
+        }
+      }
+      // 也从 e.message 对象里抓 summary（部分适配器的图片元素结构）
+      const msgArr = Array.isArray(e.message) ? e.message : []
+      for (const seg of msgArr) {
+        if (seg && (seg.type === 'image' || seg.type === 'face')) {
+          const s = (seg.data && seg.data.summary) || seg.summary
+          if (s) imageSummaries.push(s)
+        }
+      }
+    } catch (_) { /* ignore */ }
+
+    if (imageSummaries.length) {
+      // 把表情包文字拼进来，避免影响原有"仅包含关键词"的判断
+      text = (text + '\n' + imageSummaries.join('\n')).trim()
+    }
+
     if (!text) return false
 
     const senderId = getUserId(e)
