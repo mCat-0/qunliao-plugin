@@ -250,13 +250,19 @@ export class Weather extends plugin {
       const curT = isReasonableTemp(c.temp) ? c.temp : null
       const minT = isReasonableTemp(d.tempn) ? d.tempn : null
 
+      // 修正感官问题：如果实时温度比最低温度还低，则以实时温度为准作为最低温度
+      let effectiveMin = minT
+      if (curT !== null && minT !== null && Number(curT) < Number(minT)) {
+        effectiveMin = curT
+      }
+
       const viewData = Object.assign(
         {
           city: d.city || city,
           date: c.date || d.date || '',
           time: c.time || d.time || '',
           currentTemp: curT || minT || '?',
-          minTemp: minT || curT || '?',
+          minTemp: effectiveMin || curT || minT || '?',
           currentWeather: c.weather || d.weather || '',
           wind: c.wind || d.wind || '',
           humidity: c.humidity || '',
