@@ -42,8 +42,14 @@ const {
 } = await import('../components/ModuleHelper.js')
 
 const _MODULE_KEY = 'goodNight'
-const DEFAULT_GOOD_NIGHT_KW = ['睡觉了', '我要睡了', '晚安', '我要休息了']
-const DEFAULT_GOOD_MORNING_KW = ['早安', '早上好', '起床', '睡醒了']
+const DEFAULT_GOOD_NIGHT_KW = [
+  '睡觉了', '我要睡了', '晚安', '我要休息了',
+  'good night', 'goodnight', 'gn', '晚安喵'
+]
+const DEFAULT_GOOD_MORNING_KW = [
+  '早安', '早上好', '起床', '睡醒了', '早',
+  'good morning', 'morning', '早喵', '早呀', '早~', '早上好呀'
+]
 
 const PROCESSED_MSG_IDS = new Set()
 const MAX_CACHED_IDS = 200
@@ -65,7 +71,11 @@ function markAndCheckProcessed (e) {
 
 function containsAny (text, words) {
   if (!text) return false
-  return words.some((w) => text.includes(w))
+  const low = text.toLowerCase()
+  return words.some((w) => {
+    if (!w) return false
+    return low.includes(w.toLowerCase())
+  })
 }
 
 function isMeaningfulText (v) {
