@@ -348,18 +348,14 @@ export class GoodNight extends plugin {
       _MODULE_KEY, 'goodMorningKeywords', DEFAULT_GOOD_MORNING_KW
     )
 
-    // 关键单字 / 关键词：前后必须是分隔符号才触发，避免"早餐"、"早已"、"早晚"等正常词误触发
+    // 晚安：只要文本中包含「晚安」即触发，不做分隔符判断
+    // 早 / 早安：前后需为分隔符才触发，避免「早餐 / 早已 / 早晚」等正常词误触发
     // 分隔符号 = 中英文标点、括号、波浪线、斜杠、空格、空串边界等
     const SEP = '\\s\\u00a0\\u3000!！?？。.,，、；;:/\\\\、·\\-—_=+|@#$%^&*(){}<>\\[\\]\'"`（）【】《》「」『』~'
     const ZAO_RE = new RegExp('(^|[' + SEP + '])早([' + SEP + ']|$)')
-    const WAN_RE = new RegExp('(^|[' + SEP + '])晚安([' + SEP + ']|$)')
 
-    if (ZAO_RE.test(text) || WAN_RE.test(text)) {
-      if (WAN_RE.test(text) && !ZAO_RE.test(text)) {
-        await this.handleGoodNight(e)
-      } else {
-        await this.handleGoodMorning(e)
-      }
+    if (ZAO_RE.test(text)) {
+      await this.handleGoodMorning(e)
       return true
     }
 
