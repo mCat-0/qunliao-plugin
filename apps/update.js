@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { execSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -34,7 +34,6 @@ const plugin = (await import(libUrl('plugins/plugin.js'))).default
 
 const {
   isModuleEnabled,
-  isGroupAllowed,
   getString,
   getStringList
 } = await import('../components/ModuleHelper.js')
@@ -74,59 +73,137 @@ function getUpdateConfig() {
   return cfg
 }
 
-// ===== Git 命令执行 =====
-function runGit(cmd) {
-  try {
-    const cfg = getUpdateConfig()
-    const env = Object.assign({}, process.env, {
-      GIT_TERMINAL_PROMPT: '0',
-      GCM_INTERACTIVE: 'Never'
-    })
+// ===== Git 命令执行（异步，非阻塞事件循环） =====
+//
+// 关键：之前使用 execSync 会阻塞 Node.js 事件循环，在 git pull / git fetch 等待网络期间，
+// 整个 Yunzai 无法处理任何指令。改用 spawn + 异步等待，命令执行期间 Node.js 仍能响应其它消息。
+//
+// 同时注意：
+//   - stdout/stderr 必须持续读取，否则子进程缓冲区填满后会永久挂起
+//   - 给每个 git 子进程设置上限 120 秒，防止网络问题拖死插件
+//   - 禁用交互提示（GIT_TERMINAL_PROMPT=0 / GCM_INTERACTIVE=Never / ssh BatchMode=yes）
+function buildGitEnv () {
+  const cfg = getUpdateConfig()
+  const env = Object.assign({}, process.env, {
+    GIT_TERMINAL_PROMPT: '0',
+    GCM_INTERACTIVE: 'Never',
+    GIT_SSH_VARIANT: 'ssh'
+  })
 
-    // SSH key 路径支持：~/.ssh/xxx 或绝对路径
-    let sshCmd = 'ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o BatchMode=yes'
-    if (cfg.sshKeyPath) {
-      let keyPath = String(cfg.sshKeyPath).trim()
-      const home = process.env.USERPROFILE || process.env.HOME || ''
-      if (keyPath.startsWith('~/') || keyPath.startsWith('~\\')) keyPath = home + keyPath.slice(1)
-      if (keyPath.startsWith('$HOME/') || keyPath.startsWith('$HOME\\')) keyPath = home + keyPath.slice(5)
-      // 正斜杠
-      keyPath = keyPath.replace(/\\/g, '/')
-      sshCmd = sshCmd + ' -o "IdentityFile=' + keyPath + '"'
-    }
-    env.GIT_SSH_COMMAND = sshCmd
-
-    const stdout = execSync(cmd, {
-      cwd: pluginRoot,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      encoding: 'utf-8',
-      timeout: 120000,
-      windowsHide: true,
-      env: env
-    })
-    return { ok: true, stdout: (stdout || '').trim() }
-  } catch (err) {
-    let msg = (err.stderr && typeof err.stderr === 'string' ? err.stderr : '') || (err.message || String(err))
-    return { ok: false, error: msg.trim() }
+  let sshCmd = 'ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o BatchMode=yes'
+  if (cfg.sshKeyPath) {
+    let keyPath = String(cfg.sshKeyPath).trim()
+    const home = process.env.USERPROFILE || process.env.HOME || ''
+    if (keyPath.startsWith('~/') || keyPath.startsWith('~\\')) keyPath = home + keyPath.slice(1)
+    if (keyPath.startsWith('$HOME/') || keyPath.startsWith('$HOME\\')) keyPath = home + keyPath.slice(5)
+    keyPath = keyPath.replace(/\\/g, '/')
+    sshCmd = sshCmd + ' -o "IdentityFile=' + keyPath + '"'
   }
+  env.GIT_SSH_COMMAND = sshCmd
+  return env
+}
+
+function runGitAsync (cmd, timeoutMs) {
+  return new Promise((resolve) => {
+    try {
+      // 拆分：git fetch origin main → ['fetch', 'origin', 'main']
+      const parts = String(cmd || '').trim().split(/\s+/).filter(Boolean)
+      if (parts.length < 2 || parts[0] !== 'git') {
+        resolve({ ok: false, error: '无效的 git 命令: ' + cmd })
+        return
+      }
+      const args = parts.slice(1)
+
+      const child = spawn('git', args, {
+        cwd: pluginRoot,
+        env: buildGitEnv(),
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+        shell: false
+      })
+
+      let stdout = ''
+      let stderr = ''
+      let done = false
+      const safeTimeout = Number(timeoutMs) > 0 ? Number(timeoutMs) : 120000
+
+      const timer = setTimeout(() => {
+        if (done) return
+        done = true
+        try {
+          child.kill('SIGTERM')
+          setTimeout(() => { try { child.kill('SIGKILL') } catch (_) { } }, 2000)
+        } catch (_) { /* ignore */ }
+        resolve({ ok: false, error: '执行超时 (' + Math.round(safeTimeout / 1000) + 's)，请检查网络或稍后再试' })
+      }, safeTimeout)
+
+      child.stdout.on('data', (chunk) => {
+        try { stdout += chunk.toString('utf-8') } catch (_) { }
+      })
+      child.stderr.on('data', (chunk) => {
+        try { stderr += chunk.toString('utf-8') } catch (_) { }
+      })
+
+      let pending = 2
+      const tryFinish = () => {
+        if (pending > 0) return
+        clearTimeout(timer)
+        if (done) return
+        done = true
+        resolve({ ok: true, stdout: stdout.trim(), stderr: stderr.trim() })
+      }
+      child.stdout.on('end', () => { pending--; tryFinish() })
+      child.stderr.on('end', () => { pending--; tryFinish() })
+
+      child.on('error', (err) => {
+        if (done) return
+        done = true
+        clearTimeout(timer)
+        resolve({ ok: false, error: (err && err.message) ? err.message : String(err) })
+      })
+
+      child.on('exit', (code) => {
+        // 等 stdout/stderr 的 end 事件触发后再汇总
+        // 若 1.5 秒内仍未 end，强制结算（某些异常情况下可能出现）
+        setTimeout(() => {
+          if (done) return
+          done = true
+          clearTimeout(timer)
+          if (code === 0) {
+            resolve({ ok: true, stdout: stdout.trim(), stderr: stderr.trim() })
+          } else {
+            const combined = (stderr.trim() || stdout.trim() || 'git 退出码 ' + code)
+            resolve({ ok: false, error: combined })
+          }
+        }, 1500)
+      })
+    } catch (err) {
+      resolve({ ok: false, error: (err && err.message) ? err.message : String(err) })
+    }
+  })
+}
+
+async function runGit (cmd) {
+  const r = await runGitAsync(cmd, 120000)
+  return { ok: r.ok, stdout: r.ok ? (r.stdout || '') : '', error: !r.ok ? (r.error || '') : '' }
 }
 
 function isGitRepo() {
   try { return fs.existsSync(path.join(pluginRoot, '.git')) } catch (_) { return false }
 }
 
-function getCommitId() {
-  const r = runGit('git rev-parse --short HEAD')
+async function getCommitId() {
+  const r = await runGit('git rev-parse --short HEAD')
   return r.ok ? r.stdout : ''
 }
 
-function getCommitTime() {
-  const r = runGit('git log -1 --oneline --pretty=format:"%cd" --date=format:"%Y-%m-%d %H:%M"')
+async function getCommitTime() {
+  const r = await runGit('git log -1 --oneline --pretty=format:"%cd" --date=format:"%Y-%m-%d %H:%M"')
   return r.ok ? r.stdout.replace(/"/g, '') : ''
 }
 
-function getRemoteUrl() {
-  const r = runGit('git remote get-url origin')
+async function getRemoteUrl() {
+  const r = await runGit('git remote get-url origin')
   return r.ok ? r.stdout : ''
 }
 
@@ -158,8 +235,8 @@ function isAdmin(e) {
 }
 
 // ===== 获取最近 commit 日志 =====
-function getRecentLog(oldId) {
-  const r = runGit('git log -20 --oneline --pretty=format:"%h||[%cd] %s" --date=format:"%m-%d %H:%M"')
+async function getRecentLog(oldId) {
+  const r = await runGit('git log -20 --oneline --pretty=format:"%h||[%cd] %s" --date=format:"%m-%d %H:%M"')
   if (!r.ok) return []
   const lines = r.stdout.split('\n').map((l) => l.trim()).filter(Boolean)
   const result = []
@@ -176,7 +253,7 @@ function getRecentLog(oldId) {
 // ===== 错误信息友好化 =====
 function friendlyGitError(errStr) {
   const e = String(errStr || '')
-  if (e.includes('Timed out') || e.includes('timeout')) return '连接超时，请检查网络'
+  if (e.includes('Timed out') || e.includes('timeout') || e.includes('超时')) return '连接超时，请检查网络'
   if (e.includes('Failed to connect') || e.includes('unable to access')) return '无法连接远程仓库，请检查网络或仓库地址'
   if (e.includes('Permission denied') || e.includes('Permission denied (publickey)')) return 'SSH 权限被拒绝：请确认 ' + path.basename(pluginRoot) + ' 目录下配置了正确的 SSH key（在锅巴面板的 update.sshKeyPath 中可指定私钥路径）'
   if (e.includes('HTTP Basic: Access denied') || e.includes('Authentication failed')) return '需要认证：请用 SSH 方式 clone 仓库，或配置凭据后重试'
@@ -206,9 +283,9 @@ export class UpdatePlugin extends plugin {
 
   async version(e) {
     if (!isAdmin(e)) return this.reply('仅管理员可查看版本信息')
-    const id = getCommitId() || '未知'
-    const t = getCommitTime() || '未知'
-    const url = getRemoteUrl() || '未知'
+    const id = (await getCommitId()) || '未知'
+    const t = (await getCommitTime()) || '未知'
+    const url = (await getRemoteUrl()) || '未知'
     return this.reply('群聊插件版本信息\ncommit: ' + id + '\n最后更新: ' + t + '\n远程仓库: ' + url)
   }
 
@@ -229,28 +306,28 @@ export class UpdatePlugin extends plugin {
 
     isUpdating = true
     const cfg = getUpdateConfig()
-    const oldId = getCommitId()
+    const oldId = await getCommitId()
     let updateSucceeded = false
     let lastMsg = ''
 
     try {
       // 先确保在目标分支上
-      const checkBranch = runGit('git symbolic-ref --short HEAD')
+      const checkBranch = await runGit('git symbolic-ref --short HEAD')
       const curBranch = checkBranch.ok ? checkBranch.stdout : '未知'
       if (curBranch !== cfg.branch) {
-        runGit('git checkout ' + cfg.branch)
+        await runGit('git checkout ' + cfg.branch)
       }
 
       let result
       if (mode === 'repair') {
         // 强制修复：重置 + 拉取
-        runGit('git reset --hard HEAD')
-        runGit('git clean -fd')
-        result = runGit('git fetch ' + cfg.remoteName + ' ' + cfg.branch)
-        if (result.ok) result = runGit('git reset --hard ' + cfg.remoteName + '/' + cfg.branch)
+        await runGit('git reset --hard HEAD')
+        await runGit('git clean -fd')
+        result = await runGit('git fetch ' + cfg.remoteName + ' ' + cfg.branch)
+        if (result.ok) result = await runGit('git reset --hard ' + cfg.remoteName + '/' + cfg.branch)
       } else {
         // 普通更新
-        result = runGit('git pull ' + cfg.remoteName + ' ' + cfg.branch)
+        result = await runGit('git pull ' + cfg.remoteName + ' ' + cfg.branch)
       }
 
       if (!result.ok) {
@@ -260,8 +337,8 @@ export class UpdatePlugin extends plugin {
 
       const out = result.stdout
       const isAlreadyUp = /Already up[ -]to[ -]date|已经是最新的/.test(out)
-      const newId = getCommitId()
-      const newTime = getCommitTime()
+      const newId = await getCommitId()
+      const newTime = await getCommitTime()
 
       if (isAlreadyUp && oldId === newId) {
         return this.reply('群聊插件已经是最新版本\ncommit: ' + newId + '\n时间: ' + newTime)
@@ -270,9 +347,8 @@ export class UpdatePlugin extends plugin {
       updateSucceeded = true
       await this.reply('群聊插件更新成功！\n新 commit: ' + newId + '\n最后更新: ' + newTime + '\n请重启 Yunzai-Bot 使更改生效')
 
-      // 更新后输出最近变更
       if (oldId !== newId) {
-        const log = getRecentLog(oldId)
+        const log = await getRecentLog(oldId)
         if (log.length > 0) {
           const lines = log.slice(0, 10).map((l, i) => (i + 1) + '. ' + l)
           await this.reply('本次更新内容:\n' + lines.join('\n'))
