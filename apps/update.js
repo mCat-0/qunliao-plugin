@@ -60,14 +60,14 @@ const platforms = {
       const encoded = encodeURIComponent(full)
       const token = (cfg.gitlabAccessToken || '').trim()
       const base = 'https://gitlab.com/api/v4/projects/' + encoded + '/repository/tree?recursive=true&per_page=100&ref=' + branch
-      const rawBase = 'https://gitlab.com/' + full + '/-/raw/' + branch + '/'
+      const rawApiBase = 'https://gitlab.com/api/v4/projects/' + encoded + '/repository/files/'
       const extraFetchOpts = {}
       if (token) {
         extraFetchOpts.headers = { 'PRIVATE-TOKEN': token }
       }
       return {
         treeUrl: base,
-        rawUrlBuilder: (p) => rawBase + p,
+        rawUrlBuilder: (p) => rawApiBase + encodeURIComponent(p) + '/raw?ref=' + branch,
         extraFetchOpts: extraFetchOpts
       }
     }
@@ -226,7 +226,16 @@ async function tryPlatform(platformKey, cfg, mode) {
     ? await httpFetch(treeUrl, { headers: Object.assign({}, extraFetchOpts.headers) })
     : await httpFetch(treeUrl)
   if (!treeResp.ok) {
-    throw new Error('获取文件树失败: HTTP ' + treeResp.status)
+    let hint = ''
+    if (platformKey === 'gitlab' && treeResp.status === 404) {
+      const hasToken = extraFetchOpts && extraFetchOpts.headers && extraFetchOpts.headers['PRIVATE-TOKEN']
+      hint = hasToken
+        ? '（仓库路径可能有误，或 Access Token 无 read_repository 权限）'
+        : '（GitLab 仓库为私有，请在锅巴面板的 update.gitlabAccessToken 填入 Personal Access Token；留空匿名访问无法读取私有仓库）'
+    } else if (platformKey === 'gitee' && treeResp.status === 404) {
+      hint = '（Gitee 仓库为私有或需要登录，请在锅巴面板配置 update.giteeUsername / update.giteePassword）'
+    }
+    throw new Error('获取文件树失败: HTTP ' + treeResp.status + hint)
   }
   let treeData
   try { treeData = await treeResp.json() } catch (e) { throw new Error('解析文件树 JSON 失败') }
