@@ -109,6 +109,52 @@ function buildBgUrl () {
   return url
 }
 
+// 默认背景（内联 SVG base64），当随机图 API 超时/失败/空时使用
+const FALLBACK_BG =
+  'data:image/svg+xml;base64,' +
+  Buffer.from(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1600" viewBox="0 0 1200 1600">' +
+    '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">' +
+    '<stop offset="0%" stop-color="#1e3a8a"/>' +
+    '<stop offset="50%" stop-color="#38bdf8"/>' +
+    '<stop offset="100%" stop-color="#f0abfc"/>' +
+    '</linearGradient></defs><rect width="1200" height="1600" fill="url(#g)"/></svg>'
+  ).toString('base64')
+
+async function resolveBgImageUrl (rawUrl, timeoutMs) {
+  if (!rawUrl) return FALLBACK_BG
+  const ms = Number(timeoutMs)
+  const safeTimeout = Number.isFinite(ms) && ms > 0 ? ms : 5000
+  const abortCtl = new AbortController()
+  const timer = setTimeout(() => abortCtl.abort(), safeTimeout)
+  try {
+    const resp = await fetch(rawUrl, {
+      method: 'GET',
+      redirect: 'follow',
+      signal: abortCtl.signal,
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36'
+      }
+    })
+    if (!resp.ok) {
+      logger.warn(`[weather] bg image HTTP ${resp.status} for ${rawUrl}`)
+      return FALLBACK_BG
+    }
+    const ct = (resp.headers.get('content-type') || '').toLowerCase()
+    if (ct && !ct.startsWith('image/') && !ct.startsWith('application/octet-stream')) {
+      logger.warn(`[weather] bg image bad content-type: ${ct}`)
+      return FALLBACK_BG
+    }
+    return resp.url || rawUrl
+  } catch (err) {
+    logger.warn(`[weather] bg image fetch failed: ${err && err.message ? err.message : err}`)
+    return FALLBACK_BG
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 async function renderImage (data) {
   const tplFile = `${pluResPath}html/weather/weather.html`
 
@@ -117,13 +163,25 @@ async function renderImage (data) {
     return false
   }
 
+  // 先拿到"一定能渲染"的背景 URL
+  if (data && data.cover) {
+    data.cover = await resolveBgImageUrl(data.cover, getNumber(_MODULE_KEY, 'bgFetchTimeout', 5000))
+  }
+
   const screenData = {
     saveId: 'weather',
     tplFile: tplFile,
     pluResPath: pluResPath,
     data: data,
     imgType: 'jpeg',
-    quality: 92
+    quality: 92,
+    // 重要：确保页面等待"远程图片资源下载完"再截图。
+    // networkidle2 = 至少 2 个网络连接空闲 500ms，比默认 load 更保守。
+    // 同时提升到 30s 上限，避免慢速背景图导致超时。
+    pageGotoParams: {
+      waitUntil: ['load', 'networkidle2'],
+      timeout: 30000
+    }
   }
   const img = await puppeteer.screenshot('weather', screenData)
   return img

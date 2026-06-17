@@ -109,19 +109,89 @@ function formatHot (v) {
   return String(n)
 }
 
+// 默认背景（内联 SVG base64），当随机图 API 超时/失败/空时使用
+const FALLBACK_BG =
+  'data:image/svg+xml;base64,' +
+  Buffer.from(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1600" viewBox="0 0 1200 1600">' +
+    '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">' +
+    '<stop offset="0%" stop-color="#3a1c71"/>' +
+    '<stop offset="50%" stop-color="#d76d77"/>' +
+    '<stop offset="100%" stop-color="#ffaf7b"/>' +
+    '</linearGradient></defs><rect width="1200" height="1600" fill="url(#g)"/></svg>'
+  ).toString('base64')
+
+/**
+ * 预取图片 URL：
+ * - 若成功返回最终（重定向后）的 URL；
+ * - 若失败/非图片/超时，则回退到内联 SVG 渐变。
+ * 同时把 Content-Type / Content-Length 作为"图片合法性"的兜底检查，避免把"API 返回的 JSON 错误页面"当作图片渲染。
+ */
+async function resolveBgImageUrl (rawUrl, timeoutMs) {
+  if (!rawUrl) return FALLBACK_BG
+  const ms = Number(timeoutMs)
+  const safeTimeout = Number.isFinite(ms) && ms > 0 ? ms : 5000
+
+  let abortId
+  const abortCtl = new AbortController()
+  const timer = setTimeout(() => abortCtl.abort(), safeTimeout)
+
+  try {
+    const resp = await fetch(rawUrl, {
+      method: 'GET',
+      redirect: 'follow',
+      signal: abortCtl.signal,
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36'
+      }
+    })
+    if (!resp.ok) {
+      logger.warn(`[hotSearch] bg image HTTP ${resp.status} for ${rawUrl}`)
+      return FALLBACK_BG
+    }
+    const ct = (resp.headers.get('content-type') || '').toLowerCase()
+    if (ct && !ct.startsWith('image/') && !ct.startsWith('application/octet-stream')) {
+      logger.warn(`[hotSearch] bg image bad content-type: ${ct}`)
+      return FALLBACK_BG
+    }
+    // 能走到这里：URL 可访问、返回体是图片 → 用"最终 URL"
+    // fetch 不直接暴露 final url，这里复用 resp.url（多数环境会有重定向后的）
+    return resp.url || rawUrl
+  } catch (err) {
+    logger.warn(`[hotSearch] bg image fetch failed: ${err && err.message ? err.message : err}`)
+    return FALLBACK_BG
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 async function renderImage (data) {
   const tplFile = `${pluResPath}html/hotSearch/hotSearch.html`
   if (!fs.existsSync(tplFile)) {
     logger.error(`[hotSearch] 模板不存在: ${tplFile}`)
     return false
   }
+
+  // 先拿到"一定能渲染"的背景 URL
+  if (data && data.cover) {
+    data.cover = await resolveBgImageUrl(data.cover, getNumber(_MODULE_KEY, 'bgFetchTimeout', 5000))
+  }
+
   const screenData = {
     saveId: 'hotSearch',
     tplFile: tplFile,
     pluResPath: pluResPath,
     data: data,
     imgType: 'jpeg',
-    quality: 92
+    quality: 92,
+    // 重要：确保页面等待"远程图片资源下载完"再截图。
+    // networkidle2 = 至少 2 个网络连接空闲 500ms，比默认 load 更保守。
+    // 同时提升到 30s 上限，避免慢速背景图导致超时。
+    pageGotoParams: {
+      waitUntil: ['load', 'networkidle2'],
+      timeout: 30000
+    }
   }
   const img = await puppeteer.screenshot('hotSearch', screenData)
   return img

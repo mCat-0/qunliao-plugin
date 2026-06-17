@@ -7,8 +7,14 @@
   </head>
   <body>
     <div class="container" id="container">
-      <div class="bg">
-        <img src="{{data.cover}}" class="bg-img" onerror="this.parentNode.classList.add('no-bg')" />
+      <div class="bg" id="bgBox">
+        <img
+          src="{{data.cover}}"
+          class="bg-img"
+          id="bgImg"
+          onload="this.classList.add('loaded'); window.__H5Loaded = true;"
+          onerror="this.parentNode.classList.add('no-bg'); window.__H5Loaded = true;"
+        />
         <div class="bg-mask"></div>
       </div>
 
@@ -48,5 +54,21 @@
         <span>数据来源：suyanw.cn · mCat 群聊插件</span>
       </div>
     </div>
+    <script>
+      (function () {
+        function markReady () {
+          if (window.__H5Loaded) return;
+          window.__H5Loaded = true;
+        }
+        var img = document.getElementById('bgImg');
+        if (img && img.complete) {
+          markReady();
+        } else if (img) {
+          img.addEventListener('load', markReady, { once: true });
+          img.addEventListener('error', markReady, { once: true });
+        }
+        setTimeout(markReady, 2000);
+      })();
+    </script>
   </body>
 </html>

@@ -29,13 +29,19 @@ html, body {
   position: absolute;
   inset: 0;
   z-index: 0;
+  /* 图片加载前/失败时显示的保底渐变，避免出现纯灰/纯白"占位色块" */
+  background: linear-gradient(135deg, #1e3a8a 0%, #38bdf8 45%, #2e86de 75%, #f0abfc 100%);
 }
 .bg-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  /* 图片用交叉淡入，避免"突然出现"时与其它内容不同步 */
+  opacity: 0;
+  transition: opacity 400ms ease;
 }
+.bg-img.loaded { opacity: 1; }
 .bg-mask {
   position: absolute;
   inset: 0;
@@ -43,7 +49,8 @@ html, body {
     linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.55) 55%, rgba(0,0,0,0.80) 100%),
     linear-gradient(90deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.05) 50%, rgba(0,0,0,0.25) 100%);
 }
-.no-bg { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 40%, #2e86de 100%); }
+/* 图片 onerror 时隐藏图片，父容器的 background 渐变作为兜底显示 */
+.bg.no-bg .bg-img { display: none; }
 
 /* 毛玻璃卡片 —— 所有主要内容区域共用。
    参数通过 JS 在 <style> 里注入 :root{--glass-xxx: ...} */
