@@ -6,66 +6,65 @@ import {
   isModuleEnabled,
   isGroupAllowed,
   getString,
-  getStringList,
-  httpFetch
+  getStringList
 } from '../components/ModuleHelper.js'
 import { pluginRoot, pluginConfigDir } from '../model/path.js'
 
 const _MODULE_KEY = 'update'
+let isUpdating = false
 
-// 平台 → Git 远端 URL 映射
-// - GitHub/Gitee：公开仓库，HTTPS 匿名即可访问
-// - GitLab：先试 HTTPS（公开仓库），失败再试 SSH
-const gitRemoteUrls = {
-  github: {
-    https: 'https://github.com/mCat-0/qunliao-plugin.git',
-    ssh: 'git@github.com:mCat-0/qunliao-plugin.git'
-  },
-  gitee: {
-    https: 'https://gitee.com/mcat0/qunliao-plugin.git',
-    ssh: 'git@gitee.com:mcat0/qunliao-plugin.git'
-  },
-  gitlab: {
-    https: 'https://gitlab.com/mCat0/qunliao-plugin.git',
-    ssh: 'git@gitlab.com:mCat0/qunliao-plugin.git'
+// ===== 配置读取 =====
+function getUpdateConfig() {
+  const cfg = {
+    branch: 'main',
+    sshKeyPath: '',
+    remoteName: 'origin',
+    extraAdminQQ: [],
+    enabled: true
   }
+  try {
+    const v = getString(_MODULE_KEY, 'branch', '')
+    if (v) cfg.branch = v.trim()
+  } catch (_) { }
+  try {
+    const v = getString(_MODULE_KEY, 'sshKeyPath', '')
+    if (v) cfg.sshKeyPath = v.trim()
+  } catch (_) { }
+  try {
+    const v = getString(_MODULE_KEY, 'remoteName', '')
+    if (v) cfg.remoteName = v.trim()
+  } catch (_) { }
+  try {
+    const list = getStringList(_MODULE_KEY, 'extraAdminQQ', [])
+    if (Array.isArray(list) && list.length > 0) {
+      cfg.extraAdminQQ = list.map((x) => String(x).trim()).filter(Boolean)
+    }
+  } catch (_) { }
+  return cfg
 }
 
-// 安全执行 git 命令
-// opts.sshKeyPath: 可选，指定 SSH 私钥路径（如 ~/.ssh/id_ed25519_qunliao）
-// opts.isHttps: HTTPS URL 时禁用 SSH 相关，且关闭 credential helper 防止强制登录
-function runGit(cmd, opts) {
-  opts = opts || {}
+// ===== Git 命令执行 =====
+function runGit(cmd) {
   try {
-    const userKnownHosts = process.platform === 'win32' ? 'NUL' : '/dev/null'
+    const cfg = getUpdateConfig()
     const env = Object.assign({}, process.env, {
-      'GIT_TERMINAL_PROMPT': '0',
-      'GCM_INTERACTIVE': 'Never'
+      GIT_TERMINAL_PROMPT: '0',
+      GCM_INTERACTIVE: 'Never'
     })
-    if (opts.isHttps) {
-      // HTTPS 模式：完全禁用凭证链，走纯匿名访问
-      env.GIT_SSH_COMMAND = ''
-      env.SSH_ASKPASS = ''
-      env.DISPLAY = ''
-    } else {
-      // SSH 模式：可指定私钥路径，禁用 host key 交互
-      let sshCmd = 'ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=' + userKnownHosts + ' -o BatchMode=yes'
-      let keyPath = opts.sshKeyPath ? String(opts.sshKeyPath).trim() : ''
-      if (keyPath) {
-        // ~/ 展开为 USERPROFILE / HOME
-        if (keyPath.startsWith('~') || keyPath.startsWith('$HOME')) {
-          const home = process.env.USERPROFILE || process.env.HOME || ''
-          keyPath = home + keyPath.replace(/^(\$HOME|~)/, '')
-        }
-        // 路径含空格时加引号
-        if (keyPath.indexOf(' ') >= 0) {
-          sshCmd = sshCmd + ' -i "' + keyPath + '"'
-        } else {
-          sshCmd = sshCmd + ' -i ' + keyPath
-        }
-      }
-      env.GIT_SSH_COMMAND = sshCmd
+
+    // SSH key 路径支持：~/.ssh/xxx 或绝对路径
+    let sshCmd = 'ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o BatchMode=yes'
+    if (cfg.sshKeyPath) {
+      let keyPath = String(cfg.sshKeyPath).trim()
+      const home = process.env.USERPROFILE || process.env.HOME || ''
+      if (keyPath.startsWith('~/') || keyPath.startsWith('~\\')) keyPath = home + keyPath.slice(1)
+      if (keyPath.startsWith('$HOME/') || keyPath.startsWith('$HOME\\')) keyPath = home + keyPath.slice(5)
+      // 正斜杠
+      keyPath = keyPath.replace(/\\/g, '/')
+      sshCmd = sshCmd + ' -o "IdentityFile=' + keyPath + '"'
     }
+    env.GIT_SSH_COMMAND = sshCmd
+
     const stdout = execSync(cmd, {
       cwd: pluginRoot,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -77,228 +76,34 @@ function runGit(cmd, opts) {
     return { ok: true, stdout: (stdout || '').trim() }
   } catch (err) {
     let msg = (err.stderr && typeof err.stderr === 'string' ? err.stderr : '') || (err.message || String(err))
-    msg = msg.trim()
-    return { ok: false, error: msg || 'git command failed' }
+    return { ok: false, error: msg.trim() }
   }
 }
 
-// 判断本地是否存在 .git 目录（是 git 仓库）
 function isGitRepo() {
-  try {
-    return fs.existsSync(path.join(pluginRoot, '.git'))
-  } catch (_) {
-    return false
-  }
+  try { return fs.existsSync(path.join(pluginRoot, '.git')) } catch (_) { return false }
 }
 
-// 获取给定平台配置的分支名
-function getPlatformBranch(key, cfg) {
-  if (key === 'github') return cfg.githubBranch || 'main'
-  if (key === 'gitee') return cfg.giteeBranch || 'main'
-  if (key === 'gitlab') return cfg.gitlabBranch || 'main'
-  return 'main'
+function getCommitId() {
+  const r = runGit('git rev-parse --short HEAD')
+  return r.ok ? r.stdout : ''
 }
 
-// 通过 Git 执行更新
-// - update 模式：git pull <remote_url> <branch>
-// - repair 模式：git fetch + git reset --hard FETCH_HEAD
-// - 先试 HTTPS（禁用 credential helper，匿名访问公开仓库），失败再试 SSH（需本地 SSH key）
-async function tryGitCommand(platformKey, cfg, mode) {
-  if (!isGitRepo()) throw new Error('本地目录不是 Git 仓库（无 .git），已跳过 Git 更新流程')
-
-  const urls = gitRemoteUrls[platformKey]
-  if (!urls) throw new Error('未知平台: ' + platformKey)
-  const branch = getPlatformBranch(platformKey, cfg)
-  const sshKey = (cfg && cfg.sshKeyPath) ? String(cfg.sshKeyPath).trim() : ''
-
-  // HTTPS 先试（公开仓库免认证），失败再试 SSH
-  const candidates = [
-    { url: urls.https, isHttps: true },
-    { url: urls.ssh, isHttps: false }
-  ]
-  let lastErr = null
-  for (const cand of candidates) {
-    try {
-      // HTTPS: -c credential.helper= 禁用任何凭证助手，强制匿名
-      const prefix = cand.isHttps ? 'git -c credential.helper= ' : 'git '
-      if (mode === 'update') {
-        const r = runGit(prefix + 'pull "' + cand.url + '" ' + branch,
-          { isHttps: cand.isHttps, sshKeyPath: cand.isHttps ? '' : sshKey })
-        if (!r.ok) { lastErr = r.error; continue }
-        return { method: 'git', detail: 'pull ' + cand.url + ' ' + branch, stdout: r.stdout }
-      } else {
-        // repair 模式
-        const f = runGit(prefix + 'fetch "' + cand.url + '" ' + branch,
-          { isHttps: cand.isHttps, sshKeyPath: cand.isHttps ? '' : sshKey })
-        if (!f.ok) { lastErr = f.error; continue }
-        const reset = runGit('git reset --hard FETCH_HEAD')
-        if (!reset.ok) { lastErr = reset.error; continue }
-        runGit('git clean -fd')
-        return { method: 'git', detail: 'reset --hard ' + cand.url + ' ' + branch, stdout: reset.stdout }
-      }
-    } catch (e) {
-      lastErr = e.message || String(e)
-    }
-  }
-  throw new Error('Git 命令失败: ' + (lastErr || 'unknown'))
+function getCommitTime() {
+  const r = runGit('git log -1 --oneline --pretty=format:"%cd" --date=format:"%Y-%m-%d %H:%M"')
+  return r.ok ? r.stdout.replace(/"/g, '') : ''
 }
 
-const platforms = {
-  github: {
-    name: 'GitHub',
-    build: (cfg) => {
-      const owner = 'mCat-0'
-      const repo = 'qunliao-plugin'
-      const branch = cfg.githubBranch
-      const proxy = (cfg.githubProxy || '').trim()
-      const base = 'https://api.github.com/repos/' + owner + '/' + repo + '/git/trees/' + branch + '?recursive=1'
-      const rawBase = 'https://raw.githubusercontent.com/' + owner + '/' + repo + '/' + branch + '/'
-      const build = (proxy && proxy.startsWith('http'))
-        ? (p) => proxy.replace(/\/$/, '') + '/' + rawBase + p
-        : (p) => rawBase + p
-      return { treeUrl: base, rawUrlBuilder: build, extraFetchOpts: {} }
-    }
-  },
-  gitee: {
-    name: 'Gitee',
-    build: (cfg) => {
-      const owner = 'mcat0'
-      const repo = 'qunliao-plugin'
-      const branch = cfg.giteeBranch
-      const base = 'https://gitee.com/api/v5/repos/' + owner + '/' + repo + '/git/trees/' + branch + '?recursive=1'
-      const rawBase = 'https://gitee.com/' + owner + '/' + repo + '/raw/' + branch + '/'
-      const extraFetchOpts = {}
-      const user = (cfg.giteeUsername || '').trim()
-      const pass = (cfg.giteePassword || '').trim()
-      if (user && pass) {
-        try {
-          const basic = Buffer.from(user + ':' + pass).toString('base64')
-          extraFetchOpts.headers = { 'Authorization': 'Basic ' + basic }
-        } catch (_) { }
-      }
-      return {
-        treeUrl: base,
-        rawUrlBuilder: (p) => rawBase + p,
-        extraFetchOpts: extraFetchOpts
-      }
-    }
-  },
-  gitlab: {
-    name: 'GitLab',
-    build: (cfg) => {
-      const full = 'mCat0/qunliao-plugin'
-      const branch = cfg.gitlabBranch
-      const encoded = encodeURIComponent(full)
-      const token = (cfg.gitlabAccessToken || '').trim()
-      const base = 'https://gitlab.com/api/v4/projects/' + encoded + '/repository/tree?recursive=true&per_page=100&ref=' + branch
-      const rawApiBase = 'https://gitlab.com/api/v4/projects/' + encoded + '/repository/files/'
-      const extraFetchOpts = {}
-      if (token) {
-        extraFetchOpts.headers = { 'PRIVATE-TOKEN': token }
-      }
-      return {
-        treeUrl: base,
-        rawUrlBuilder: (p) => rawApiBase + encodeURIComponent(p) + '/raw?ref=' + branch,
-        extraFetchOpts: extraFetchOpts
-      }
-    }
-  }
+function getRemoteUrl() {
+  const r = runGit('git remote get-url origin')
+  return r.ok ? r.stdout : ''
 }
 
-function isUserConfigPath(relPath) {
-  if (!relPath) return false
-  const p = relPath.replace(/\\/g, '/').replace(/^\.\//, '')
-  return (
-    p === 'config.yaml' ||
-    p === 'config/config.yaml' ||
-    p === 'config.yml' ||
-    p === 'config/config.yml' ||
-    (p.startsWith('config/') && (p.endsWith('.yaml') || p.endsWith('.yml')))
-  )
-}
-
-function extractFiles(treeData) {
-  let items
-  if (Array.isArray(treeData)) {
-    items = treeData
-  } else if (treeData && Array.isArray(treeData.tree)) {
-    items = treeData.tree
-  } else {
-    return []
-  }
-  return items
-    .filter((it) => it && (it.type === 'blob' || it.type === 'file'))
-    .map((it) => String(it.path || it.name || ''))
-    .filter(Boolean)
-}
-
-async function fetchFileRaw(rawUrl, filePath, extraOpts) {
-  const lower = String(filePath || '').toLowerCase()
-  const isText = lower.endsWith('.js') || lower.endsWith('.json') ||
-    lower.endsWith('.md') || lower.endsWith('.yaml') || lower.endsWith('.yml') ||
-    lower.endsWith('.css') || lower.endsWith('.html') || lower.endsWith('.htm') ||
-    lower.endsWith('.txt')
-  let opts = null
-  if (extraOpts && typeof extraOpts === 'object') {
-    if (extraOpts.headers) {
-      opts = { headers: Object.assign({}, extraOpts.headers) }
-    }
-  }
-  const res = opts ? await httpFetch(rawUrl, opts) : await httpFetch(rawUrl)
-  if (!res.ok) throw new Error('HTTP ' + res.status)
-  if (isText) {
-    return { isText: true, text: await res.text() }
-  }
-  return { isText: false, buffer: await res.arrayBuffer() }
-}
-
-function getUpdateConfig() {
-  const cfg = {
-    defaultPlatform: 'gitlab',
-    githubBranch: 'main',
-    githubProxy: '',
-    giteeBranch: 'main',
-    giteeUsername: '',
-    giteePassword: '',
-    gitlabBranch: 'main',
-    gitlabAccessToken: '',
-    sshKeyPath: '',
-    extraAdminQQ: [],
-    enabled: true
-  }
-  try {
-    const raw = getString(_MODULE_KEY, 'defaultPlatform', '')
-    if (raw) cfg.defaultPlatform = raw
-  } catch (_) { }
-  const keys = [
-    'githubBranch', 'githubProxy',
-    'giteeBranch', 'giteeUsername', 'giteePassword',
-    'gitlabBranch', 'gitlabAccessToken',
-    'sshKeyPath'
-  ]
-  for (const k of keys) {
-    try {
-      const v = getString(_MODULE_KEY, k, '')
-      if (v) cfg[k] = v
-    } catch (_) { }
-  }
-  try {
-    const list = getStringList(_MODULE_KEY, 'extraAdminQQ', [])
-    if (Array.isArray(list) && list.length > 0) {
-      cfg.extraAdminQQ = list.map((x) => String(x).trim()).filter(Boolean)
-    }
-  } catch (_) { }
-  return cfg
-}
-
+// ===== 管理员校验 =====
 function isAdmin(e) {
   const uid = String(e?.user_id || e?.sender?.user_id || '')
   if (!uid) return false
-
-  if (e?.isMaster === true || e?.is_master === true) {
-    logger.mark(`[update] 用户 ${uid} 通过 e.isMaster 校验`)
-    return true
-  }
+  if (e?.isMaster === true || e?.is_master === true) return true
 
   const cfg = getUpdateConfig()
   if (cfg.extraAdminQQ && Array.isArray(cfg.extraAdminQQ)) {
@@ -309,146 +114,58 @@ function isAdmin(e) {
   }
 
   const masterQQs = []
-  try {
-    const c1 = Bot?.config?.master
-    if (Array.isArray(c1)) masterQQs.push(...c1)
-    else if (typeof c1 === 'string' || typeof c1 === 'number') masterQQs.push(c1)
-  } catch (_) { }
-  try {
-    const c2 = Bot?.master
-    if (Array.isArray(c2)) masterQQs.push(...c2)
-    else if (typeof c2 === 'string' || typeof c2 === 'number') masterQQs.push(c2)
-  } catch (_) { }
-  try {
-    const c3 = Bot?.config?.other?.masterQQ
-    if (Array.isArray(c3)) masterQQs.push(...c3)
-    else if (typeof c3 === 'string' || typeof c3 === 'number') masterQQs.push(c3)
-  } catch (_) { }
-  try {
-    const c4 = Bot?.config?.other?.master
-    if (Array.isArray(c4)) masterQQs.push(...c4)
-    else if (typeof c4 === 'string' || typeof c4 === 'number') masterQQs.push(c4)
-  } catch (_) { }
-
-  const normalized = masterQQs.map((x) => String(x).trim()).filter(Boolean)
-  if (normalized.length > 0) {
-    if (normalized.includes(uid)) {
-      logger.mark(`[update] 用户 ${uid} 通过 Bot 主人列表校验 (${normalized.join(',')})`)
-      return true
-    }
+  for (const field of ['Bot?.config?.master', 'Bot?.master', 'Bot?.config?.other?.masterQQ', 'Bot?.config?.other?.master']) {
+    try {
+      const val = eval(field)
+      if (Array.isArray(val)) masterQQs.push(...val)
+      else if (typeof val === 'string' || typeof val === 'number') masterQQs.push(val)
+    } catch (_) { }
   }
-
-  logger.warn(`[update] 用户 ${uid} 非管理员 (Bot主人列表: ${normalized.length > 0 ? normalized.join(',') : '空'})`)
+  const normalized = masterQQs.map((x) => String(x).trim()).filter(Boolean)
+  if (normalized.length > 0 && normalized.includes(uid)) return true
   return false
 }
 
-function buildTryOrder(cfg) {
-  const order = []
-  const platformKeys = ['github', 'gitee', 'gitlab']
-  const first = platformKeys.includes(cfg.defaultPlatform) ? cfg.defaultPlatform : 'gitlab'
-  order.push(first)
-  for (const k of platformKeys) if (!order.includes(k)) order.push(k)
-  return order
+// ===== 获取最近 commit 日志 =====
+function getRecentLog(oldId) {
+  const r = runGit('git log -20 --oneline --pretty=format:"%h||[%cd] %s" --date=format:"%m-%d %H:%M"')
+  if (!r.ok) return []
+  const lines = r.stdout.split('\n').map((l) => l.trim()).filter(Boolean)
+  const result = []
+  for (const line of lines) {
+    const parts = line.split('||')
+    if (parts.length < 2) continue
+    if (parts[0] === oldId) break
+    if (parts[1].includes('Merge branch')) continue
+    result.push(parts[1])
+  }
+  return result
 }
 
-async function tryPlatform(platformKey, cfg, mode) {
-  const platform = platforms[platformKey]
-  const { treeUrl, rawUrlBuilder, extraFetchOpts } = platform.build(cfg)
-
-  const treeResp = extraFetchOpts && extraFetchOpts.headers
-    ? await httpFetch(treeUrl, { headers: Object.assign({}, extraFetchOpts.headers) })
-    : await httpFetch(treeUrl)
-  if (!treeResp.ok) {
-    let hint = ''
-    if (platformKey === 'gitlab' && treeResp.status === 404) {
-      const hasToken = extraFetchOpts && extraFetchOpts.headers && extraFetchOpts.headers['PRIVATE-TOKEN']
-      hint = hasToken
-        ? '（仓库路径可能有误，或 Access Token 无 read_repository 权限）'
-        : '（GitLab 仓库为私有，请在锅巴面板的 update.gitlabAccessToken 填入 Personal Access Token；留空匿名访问无法读取私有仓库）'
-    } else if (platformKey === 'gitee' && treeResp.status === 404) {
-      hint = '（Gitee 仓库为私有或需要登录，请在锅巴面板配置 update.giteeUsername / update.giteePassword）'
-    }
-    throw new Error('获取文件树失败: HTTP ' + treeResp.status + hint)
-  }
-  let treeData
-  try { treeData = await treeResp.json() } catch (e) { throw new Error('解析文件树 JSON 失败') }
-  const files = extractFiles(treeData)
-  if (!files.length) throw new Error('未找到文件')
-
-  const shouldSkip = (p) => {
-    if (mode === 'update' && isUserConfigPath(p)) return true
-    return false
-  }
-
-  const report = { downloaded: 0, skipped: 0, errors: [] }
-  for (const relPath of files) {
-    if (!relPath) continue
-    if (relPath.endsWith('/')) continue
-    if (relPath.startsWith('.git/') || relPath === '.git') continue
-    if (shouldSkip(relPath)) {
-      report.skipped++
-      continue
-    }
-    try {
-      const rawUrl = rawUrlBuilder(relPath)
-      const content = await fetchFileRaw(rawUrl, relPath, extraFetchOpts)
-      const absPath = path.join(pluginRoot, relPath)
-      const dir = path.dirname(absPath)
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-      if (content.isText) {
-        fs.writeFileSync(absPath, content.text, 'utf-8')
-      } else {
-        fs.writeFileSync(absPath, Buffer.from(content.buffer))
-      }
-      report.downloaded++
-    } catch (err) {
-      report.errors.push(relPath + ': ' + (err.message || err))
-    }
-  }
-
-  if (report.errors.length > 0 && report.downloaded === 0) {
-    throw new Error('所有文件均拉取失败: ' + report.errors.slice(0, 3).join('; '))
-  }
-  return report
+// ===== 错误信息友好化 =====
+function friendlyGitError(errStr) {
+  const e = String(errStr || '')
+  if (e.includes('Timed out') || e.includes('timeout')) return '连接超时，请检查网络'
+  if (e.includes('Failed to connect') || e.includes('unable to access')) return '无法连接远程仓库，请检查网络或仓库地址'
+  if (e.includes('Permission denied') || e.includes('Permission denied (publickey)')) return 'SSH 权限被拒绝：请确认 ' + path.basename(pluginRoot) + ' 目录下配置了正确的 SSH key（在锅巴面板的 update.sshKeyPath 中可指定私钥路径）'
+  if (e.includes('HTTP Basic: Access denied') || e.includes('Authentication failed')) return '需要认证：请用 SSH 方式 clone 仓库，或配置凭据后重试'
+  if (e.includes('not a git repository')) return '本地目录不是 git 仓库，请用 git clone 方式安装插件'
+  if (e.includes('Already up to date') || e.includes('已经是最新的')) return '已经是最新版本'
+  return e
 }
 
-function clearUserConfig() {
-  try {
-    const entries = fs.readdirSync(pluginConfigDir)
-    let removed = 0
-    for (const name of entries) {
-      if (name.endsWith('.yaml') || name.endsWith('.yml')) {
-        if (name.includes('_default')) continue
-        const abs = path.join(pluginConfigDir, name)
-        try {
-          fs.rmSync(abs, { force: true })
-          removed++
-        } catch (_) { }
-      }
-    }
-    return removed
-  } catch (e) {
-    return 0
-  }
-}
-
-const log = (msg) => {
-  try { logger.mark(msg) } catch (_) { console.log(msg) }
-}
-const logWarn = (msg) => {
-  try { logger.warn(msg) } catch (_) { console.warn(msg) }
-}
-
+// ===== 主入口 =====
 export class UpdatePlugin extends plugin {
   constructor() {
     super({
-      name: 'UpdatePlugin',
+      name: 'qunliao-UpdatePlugin',
       dsc: '群聊插件：插件更新（管理员专用）',
       event: 'message',
       priority: 10,
       rule: [
         { reg: '^#更新群聊插件$', permission: 'master', fnc: 'update' },
-        { reg: '^#修复群聊插件$', permission: 'master', fnc: 'repair' }
+        { reg: '^#修复群聊插件$', permission: 'master', fnc: 'repair' },
+        { reg: '^#群聊插件版本$', permission: 'master', fnc: 'version' }
       ]
     })
   }
@@ -456,59 +173,85 @@ export class UpdatePlugin extends plugin {
   async update(e) { return this.runUpdate(e, 'update') }
   async repair(e) { return this.runUpdate(e, 'repair') }
 
+  async version(e) {
+    if (!isAdmin(e)) return this.reply('仅管理员可查看版本信息')
+    const id = getCommitId() || '未知'
+    const t = getCommitTime() || '未知'
+    const url = getRemoteUrl() || '未知'
+    return this.reply('群聊插件版本信息\ncommit: ' + id + '\n最后更新: ' + t + '\n远程仓库: ' + url)
+  }
+
   async runUpdate(e, mode) {
-    if (!isModuleEnabled(_MODULE_KEY)) {
-      return this.reply('插件更新失败：「在线更新」功能已被禁用')
-    }
-    if (!isGroupAllowed(e, _MODULE_KEY)) {
-      return this.reply('插件更新失败：当前群不在白名单内')
-    }
-    if (!isAdmin(e)) {
-      return this.reply('插件更新失败：仅管理员可使用该指令')
+    if (!isModuleEnabled(_MODULE_KEY)) return this.reply('插件更新失败：更新功能已被禁用')
+    if (!isAdmin(e)) return this.reply('插件更新失败：仅管理员可使用该指令')
+
+    if (isUpdating) {
+      await this.reply('已有更新正在执行中，请稍候...')
+      return
     }
 
-    this.reply('正在尝试执行更新插件，请稍等...').catch(() => {})
+    if (!isGitRepo()) {
+      return this.reply('插件目录非 git clone 方式安装，无法自动更新。请先删除旧插件，再用 git clone https://gitee.com/mcat0/qunliao-plugin.git 重新安装')
+    }
 
+    await this.reply('正在执行群聊插件' + (mode === 'repair' ? '强制修复' : '更新') + '，请稍等...')
+
+    isUpdating = true
     const cfg = getUpdateConfig()
-    const modeText = mode === 'repair' ? '修复（覆盖所有文件并清除用户配置）' : '更新（保留用户配置）'
-    log('[update] ' + modeText + ' 开始，默认平台=' + cfg.defaultPlatform)
+    const oldId = getCommitId()
+    let updateSucceeded = false
+    let lastMsg = ''
 
-    const order = buildTryOrder(cfg)
-    const useGit = isGitRepo()
-    let lastErr = null
-    for (const key of order) {
-      // 阶段 1：优先尝试 Git 命令（更快、更可靠，复用 SSH/凭据缓存）
-      if (useGit) {
-        try {
-          log('[update] [Git] 尝试 ' + platforms[key].name)
-          const result = await tryGitCommand(key, cfg, mode)
-          log('[update] [Git] ' + platforms[key].name + ' 成功: ' + result.detail)
-          if (mode === 'repair') {
-            const removed = clearUserConfig()
-            log('[update] 已清除 ' + removed + ' 个用户配置文件')
-          }
-          return this.reply('群聊插件更新成功，请重启Yunzai-Bot')
-        } catch (err) {
-          lastErr = err
-          logWarn('[update] [Git] ' + platforms[key].name + ' 失败: ' + (err.message || err) + '，回退到 HTTP API 方式')
-        }
+    try {
+      // 先确保在目标分支上
+      const checkBranch = runGit('git symbolic-ref --short HEAD')
+      const curBranch = checkBranch.ok ? checkBranch.stdout : '未知'
+      if (curBranch !== cfg.branch) {
+        runGit('git checkout ' + cfg.branch)
       }
 
-      // 阶段 2：回退到 HTTP API 逐文件下载
-      try {
-        log('[update] [HTTP] 尝试平台 ' + platforms[key].name)
-        const report = await tryPlatform(key, cfg, mode)
-        log('[update] [HTTP] ' + platforms[key].name + ' 成功：下载 ' + report.downloaded + '，跳过 ' + report.skipped + ' 条')
-        if (mode === 'repair') {
-          const removed = clearUserConfig()
-          log('[update] 已清除 ' + removed + ' 个用户配置文件')
-        }
-        return this.reply('群聊插件更新成功，请重启Yunzai-Bot')
-      } catch (err) {
-        lastErr = err
-        logWarn('[update] [HTTP] ' + platforms[key].name + ' 失败: ' + (err.message || err))
+      let result
+      if (mode === 'repair') {
+        // 强制修复：重置 + 拉取
+        runGit('git reset --hard HEAD')
+        runGit('git clean -fd')
+        result = runGit('git fetch ' + cfg.remoteName + ' ' + cfg.branch)
+        if (result.ok) result = runGit('git reset --hard ' + cfg.remoteName + '/' + cfg.branch)
+      } else {
+        // 普通更新
+        result = runGit('git pull ' + cfg.remoteName + ' ' + cfg.branch)
       }
+
+      if (!result.ok) {
+        lastMsg = friendlyGitError(result.error)
+        return this.reply('插件更新失败：' + lastMsg)
+      }
+
+      const out = result.stdout
+      const isAlreadyUp = /Already up[ -]to[ -]date|已经是最新的/.test(out)
+      const newId = getCommitId()
+      const newTime = getCommitTime()
+
+      if (isAlreadyUp && oldId === newId) {
+        return this.reply('群聊插件已经是最新版本\ncommit: ' + newId + '\n时间: ' + newTime)
+      }
+
+      updateSucceeded = true
+      await this.reply('群聊插件更新成功！\n新 commit: ' + newId + '\n最后更新: ' + newTime + '\n请重启 Yunzai-Bot 使更改生效')
+
+      // 更新后输出最近变更
+      if (oldId !== newId) {
+        const log = getRecentLog(oldId)
+        if (log.length > 0) {
+          const lines = log.slice(0, 10).map((l, i) => (i + 1) + '. ' + l)
+          await this.reply('本次更新内容:\n' + lines.join('\n'))
+        }
+      }
+    } catch (err) {
+      lastMsg = String(err.message || err)
+      return this.reply('插件更新失败：' + lastMsg)
+    } finally {
+      isUpdating = false
     }
-    return this.reply('插件更新失败：' + (lastErr?.message || lastErr))
   }
 }
