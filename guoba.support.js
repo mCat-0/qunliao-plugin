@@ -817,6 +817,13 @@ export function supportGuoba() {
           componentProps: { placeholder: "main" }
         },
         {
+          field: "update.gitlabAccessToken",
+          label: "GitLab Access Token",
+          bottomHelpMessage: "当 GitLab 仓库为私有时需填入；留空则匿名访问",
+          component: "Input",
+          componentProps: { placeholder: "留空或填 GitLab Personal Access Token", type: "password" }
+        },
+        {
           field: "update.extraAdminQQ",
           label: "额外管理员 QQ",
           bottomHelpMessage: "除 Yunzai 内置 master 外，允许使用更新指令的 QQ 号。留空则只有 Bot 主人可用",

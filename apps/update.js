@@ -58,12 +58,17 @@ const platforms = {
       const full = 'mCat0/qunliao-plugin'
       const branch = cfg.gitlabBranch
       const encoded = encodeURIComponent(full)
+      const token = (cfg.gitlabAccessToken || '').trim()
       const base = 'https://gitlab.com/api/v4/projects/' + encoded + '/repository/tree?recursive=true&per_page=100&ref=' + branch
       const rawBase = 'https://gitlab.com/' + full + '/-/raw/' + branch + '/'
+      const extraFetchOpts = {}
+      if (token) {
+        extraFetchOpts.headers = { 'PRIVATE-TOKEN': token }
+      }
       return {
         treeUrl: base,
         rawUrlBuilder: (p) => rawBase + p,
-        extraFetchOpts: {}
+        extraFetchOpts: extraFetchOpts
       }
     }
   }
@@ -125,6 +130,7 @@ function getUpdateConfig() {
     giteeUsername: '',
     giteePassword: '',
     gitlabBranch: 'main',
+    gitlabAccessToken: '',
     extraAdminQQ: [],
     enabled: true
   }
@@ -135,7 +141,7 @@ function getUpdateConfig() {
   const keys = [
     'githubBranch', 'githubProxy',
     'giteeBranch', 'giteeUsername', 'giteePassword',
-    'gitlabBranch'
+    'gitlabBranch', 'gitlabAccessToken'
   ]
   for (const k of keys) {
     try {
