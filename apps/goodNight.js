@@ -301,6 +301,29 @@ export class GoodNight extends plugin {
       _MODULE_KEY, 'goodMorningKeywords', DEFAULT_GOOD_MORNING_KW
     )
 
+    // 支持单字触发：去除常见包裹符号后若仅剩 早 / 晚安 也命中
+    //   例如：「早」「早，」"{早}"「[早]」"/早"「早。」「  早!  」
+    //        「晚安」「晚安~」「{晚安}」「/晚安」
+    function normalizeGreeting (s) {
+      // 先去掉前后空白，再剥掉包裹字符（{}[]<>"'`、中英文括号、斜杠、中英文逗号句号感叹号问号顿号波浪线）
+      const startStr = s.trim()
+      // 用正则把"仅含"一个关键词 + 任意非中文字符的情况统一识别
+      return startStr
+        .replace(/[{}[\]<>""''`（）【】《》「」『』（）~!！?？。.,，、；;:/\\、·\-—_=+|\\@#$%^&*()]/g, '')
+        .trim()
+    }
+
+    const stripped = normalizeGreeting(text)
+
+    if (stripped === '晚安' || stripped === '早') {
+      if (stripped === '晚安') {
+        await this.handleGoodNight(e)
+      } else {
+        await this.handleGoodMorning(e)
+      }
+      return true
+    }
+
     if (containsAny(text, goodNightKeywords)) {
       await this.handleGoodNight(e)
       return true
