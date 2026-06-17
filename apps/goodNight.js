@@ -348,22 +348,14 @@ export class GoodNight extends plugin {
       _MODULE_KEY, 'goodMorningKeywords', DEFAULT_GOOD_MORNING_KW
     )
 
-    // 支持单字触发：去除常见包裹符号后若仅剩 早 / 晚安 也命中
-    //   例如：「早」「早，」"{早}"「[早]」"/早"「早。」「  早!  」
-    //        「晚安」「晚安~」「{晚安}」「/晚安」
-    function normalizeGreeting (s) {
-      // 先去掉前后空白，再剥掉包裹字符（{}[]<>"'`、中英文括号、斜杠、中英文逗号句号感叹号问号顿号波浪线）
-      const startStr = s.trim()
-      // 用正则把"仅含"一个关键词 + 任意非中文字符的情况统一识别
-      return startStr
-        .replace(/[{}[\]<>""''`（）【】《》「」『』（）~!！?？。.,，、；;:/\\、·\-—_=+|\\@#$%^&*()]/g, '')
-        .trim()
-    }
+    // 关键单字 / 关键词：前后必须是分隔符号才触发，避免"早餐"、"早已"、"早晚"等正常词误触发
+    // 分隔符号 = 中英文标点、括号、波浪线、斜杠、空格、空串边界等
+    const SEP = '\\s\\u00a0\\u3000!！?？。.,，、；;:/\\\\、·\\-—_=+|@#$%^&*(){}<>\\[\\]\'"`（）【】《》「」『』~'
+    const ZAO_RE = new RegExp('(^|[' + SEP + '])早([' + SEP + ']|$)')
+    const WAN_RE = new RegExp('(^|[' + SEP + '])晚安([' + SEP + ']|$)')
 
-    const stripped = normalizeGreeting(text)
-
-    if (stripped === '晚安' || stripped === '早') {
-      if (stripped === '晚安') {
+    if (ZAO_RE.test(text) || WAN_RE.test(text)) {
+      if (WAN_RE.test(text) && !ZAO_RE.test(text)) {
         await this.handleGoodNight(e)
       } else {
         await this.handleGoodMorning(e)
