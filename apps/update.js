@@ -30,14 +30,25 @@ const gitRemoteUrls = {
 }
 
 // 安全执行 git 命令，返回 { ok, stdout } 或 { ok, error }
+// - 禁用 SSH host key 交互确认（避免首次连接挂起）
+// - 禁用终端密码提示（GIT_TERMINAL_PROMPT=0，失败快退而非挂起等待输入）
 function runGit(cmd) {
   try {
+    const userKnownHosts = process.platform === 'win32' ? 'NUL' : '/dev/null'
+    const env = Object.assign({}, process.env, {
+      'GIT_SSH_COMMAND': 'ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=' + userKnownHosts + ' -o BatchMode=yes',
+      'GIT_TERMINAL_PROMPT': '0',
+      'GCM_INTERACTIVE': 'Never',
+      'SSH_ASKPASS': '',
+      'DISPLAY': ''
+    })
     const stdout = execSync(cmd, {
       cwd: pluginRoot,
       stdio: ['ignore', 'pipe', 'pipe'],
       encoding: 'utf-8',
       timeout: 120000,
-      windowsHide: true
+      windowsHide: true,
+      env: env
     })
     return { ok: true, stdout: (stdout || '').trim() }
   } catch (err) {
