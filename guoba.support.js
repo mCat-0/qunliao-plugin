@@ -95,11 +95,11 @@ export function supportGuoba() {
 
   return {
     pluginInfo: {
-      name: 'qunliao-plugin',
+      name: 'Qunliao-Plugin',
       title: '群聊插件 Qunliao Plugin',
-      author: ['qunliao-plugin'],
-      authorLink: [],
-      link: null,
+      author: ['mCat', 'Trae'],
+      authorLink: ['https://gitee.com/mcat0', 'https://github.com/mCat-0'],
+      link: 'https://gitee.com/mcat0/qunliao-plugin',
       isV3: true,
       isV2: false,
       showInMenu: true,
