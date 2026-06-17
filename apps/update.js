@@ -1,6 +1,7 @@
 import plugin from '../../../lib/plugins/plugin.js'
 import fs from 'node:fs'
 import path from 'node:path'
+import { execSync } from 'node:child_process'
 import {
   isModuleEnabled,
   isGroupAllowed,
@@ -11,6 +12,94 @@ import {
 import { pluginRoot, pluginConfigDir } from '../model/path.js'
 
 const _MODULE_KEY = 'update'
+
+// 平台 → Git 远端 URL 映射（先试 SSH，失败再试 HTTPS）
+const gitRemoteUrls = {
+  github: {
+    ssh: 'git@github.com:mCat-0/qunliao-plugin.git',
+    https: 'https://github.com/mCat-0/qunliao-plugin.git'
+  },
+  gitee: {
+    ssh: 'git@gitee.com:mcat0/qunliao-plugin.git',
+    https: 'https://gitee.com/mcat0/qunliao-plugin.git'
+  },
+  gitlab: {
+    ssh: 'git@gitlab.com:mCat0/qunliao-plugin.git',
+    https: 'https://gitlab.com/mCat0/qunliao-plugin.git'
+  }
+}
+
+// 安全执行 git 命令，返回 { ok, stdout } 或 { ok, error }
+function runGit(cmd) {
+  try {
+    const stdout = execSync(cmd, {
+      cwd: pluginRoot,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      encoding: 'utf-8',
+      timeout: 120000,
+      windowsHide: true
+    })
+    return { ok: true, stdout: (stdout || '').trim() }
+  } catch (err) {
+    let msg = (err.stderr && typeof err.stderr === 'string' ? err.stderr : '') || (err.message || String(err))
+    msg = msg.trim()
+    return { ok: false, error: msg || 'git command failed' }
+  }
+}
+
+// 判断本地是否存在 .git 目录（是 git 仓库）
+function isGitRepo() {
+  try {
+    return fs.existsSync(path.join(pluginRoot, '.git'))
+  } catch (_) {
+    return false
+  }
+}
+
+// 获取给定平台配置的分支名
+function getPlatformBranch(key, cfg) {
+  if (key === 'github') return cfg.githubBranch || 'main'
+  if (key === 'gitee') return cfg.giteeBranch || 'main'
+  if (key === 'gitlab') return cfg.gitlabBranch || 'main'
+  return 'main'
+}
+
+// 通过 Git 执行更新
+// - update 模式：git pull <remote_url> <branch>，不触碰 .gitignore 中的文件
+// - repair 模式：git fetch + git reset --hard + 清除用户配置
+async function tryGitCommand(platformKey, cfg, mode) {
+  if (!isGitRepo()) throw new Error('本地目录不是 Git 仓库（无 .git），已跳过 Git 更新流程')
+
+  const urls = gitRemoteUrls[platformKey]
+  if (!urls) throw new Error('未知平台: ' + platformKey)
+  const branch = getPlatformBranch(platformKey, cfg)
+
+  // 先尝试 SSH，失败再试 HTTPS
+  const urlCandidates = [urls.ssh, urls.https]
+  let lastErr = null
+  for (const url of urlCandidates) {
+    try {
+      if (mode === 'update') {
+        // 更新模式：git pull，保留本地未追踪文件（如用户自己的 config.yaml）
+        const r = runGit('git pull "' + url + '" ' + branch)
+        if (!r.ok) { lastErr = r.error; continue }
+        return { method: 'git', detail: 'pull ' + url + ' ' + branch, stdout: r.stdout }
+      } else {
+        // 修复模式：fetch → reset --hard → 清除用户配置
+        const f = runGit('git fetch "' + url + '" ' + branch)
+        if (!f.ok) { lastErr = f.error; continue }
+        const reset = runGit('git reset --hard FETCH_HEAD')
+        if (!reset.ok) { lastErr = reset.error; continue }
+        const clean = runGit('git clean -fd')
+        if (!clean.ok) { lastErr = clean.error; continue }
+        return { method: 'git', detail: 'reset --hard ' + url + ' ' + branch, stdout: reset.stdout }
+      }
+    } catch (e) {
+      lastErr = e.message || String(e)
+    }
+  }
+  throw new Error('Git 命令失败: ' + (lastErr || 'unknown'))
+}
 
 const platforms = {
   github: {
@@ -341,12 +430,31 @@ export class UpdatePlugin extends plugin {
     log('[update] ' + modeText + ' 开始，默认平台=' + cfg.defaultPlatform)
 
     const order = buildTryOrder(cfg)
+    const useGit = isGitRepo()
     let lastErr = null
     for (const key of order) {
+      // 阶段 1：优先尝试 Git 命令（更快、更可靠，复用 SSH/凭据缓存）
+      if (useGit) {
+        try {
+          log('[update] [Git] 尝试 ' + platforms[key].name)
+          const result = await tryGitCommand(key, cfg, mode)
+          log('[update] [Git] ' + platforms[key].name + ' 成功: ' + result.detail)
+          if (mode === 'repair') {
+            const removed = clearUserConfig()
+            log('[update] 已清除 ' + removed + ' 个用户配置文件')
+          }
+          return this.reply('群聊插件更新成功，请重启Yunzai-Bot')
+        } catch (err) {
+          lastErr = err
+          logWarn('[update] [Git] ' + platforms[key].name + ' 失败: ' + (err.message || err) + '，回退到 HTTP API 方式')
+        }
+      }
+
+      // 阶段 2：回退到 HTTP API 逐文件下载
       try {
-        log('[update] 尝试平台 ' + platforms[key].name)
+        log('[update] [HTTP] 尝试平台 ' + platforms[key].name)
         const report = await tryPlatform(key, cfg, mode)
-        log('[update] ' + platforms[key].name + ' 成功：下载 ' + report.downloaded + '，跳过 ' + report.skipped + ' 条')
+        log('[update] [HTTP] ' + platforms[key].name + ' 成功：下载 ' + report.downloaded + '，跳过 ' + report.skipped + ' 条')
         if (mode === 'repair') {
           const removed = clearUserConfig()
           log('[update] 已清除 ' + removed + ' 个用户配置文件')
@@ -354,7 +462,7 @@ export class UpdatePlugin extends plugin {
         return this.reply('群聊插件更新成功，请重启Yunzai-Bot')
       } catch (err) {
         lastErr = err
-        logWarn('[update] ' + platforms[key].name + ' 失败: ' + (err.message || err))
+        logWarn('[update] [HTTP] ' + platforms[key].name + ' 失败: ' + (err.message || err))
       }
     }
     return this.reply('插件更新失败：' + (lastErr?.message || lastErr))
