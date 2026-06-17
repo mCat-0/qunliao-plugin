@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html;charset=utf-8" />
+    <link rel="stylesheet" type="text/css" href="{{pluResPath}}html/dailyNews/dailyNews.css" />
+  </head>
+  <body>
+    <div class="container" id="container">
+      {{if data.cover}}
+      <div class="cover-wrap">
+        <img src="{{data.cover}}" class="cover" onerror="this.parentNode.classList.add('no-cover')" />
+        <div class="cover-overlay">
+          <div class="title">每日早报 · 60 秒读懂世界</div>
+          <div class="subtitle">{{data.date}} · {{data.day_of_week}} · {{data.lunar_date}}</div>
+        </div>
+      </div>
+      {{else}}
+      <div class="header">
+        <div class="title">每日早报 · 60 秒读懂世界</div>
+        <div class="subtitle">{{data.date}} · {{data.day_of_week}} · {{data.lunar_date}}</div>
+      </div>
+      {{/if}}
+
+      <div class="news-list">
+        {{each data.news item index}}
+        <div class="news-item">
+          <span class="news-index">{{index + 1}}.</span>
+          <span class="news-text">{{item}}</span>
+        </div>
+        {{/each}}
+      </div>
+
+      {{if data.tip}}
+      <div class="tip">
+        <span class="tip-label">每日一句</span>
+        <span class="tip-text">{{data.tip}}</span>
+      </div>
+      {{/if}}
+
+      <div class="footer">
+        <span>数据来源：60s-api · mCat</span>
+      </div>
+    </div>
+  </body>
+</html>

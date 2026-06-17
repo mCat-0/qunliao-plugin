@@ -1,0 +1,204 @@
+# ============================================================
+# Qunliao Plugin Global Configuration (Default)
+# ============================================================
+
+# ------------------------------------------------------------
+# 通用配置 Global Settings
+# ------------------------------------------------------------
+requestTimeoutMs: 15000
+userAgent: "YunzaiBot/3.0 qunliao-plugin/1.0"
+
+# 全局白名单群，留空则所有群可用。私聊用 8888 代替
+onlyGroupID: []
+
+# ------------------------------------------------------------
+# 每日早报 Daily News
+# ------------------------------------------------------------
+dailyNews:
+  # 是否启用模块
+  enabled: true
+  # 早报数据来源 API
+  apiUrl: "https://60s.crystelf.top/v2/60s"
+  # 封面图 API（可选，留空则不使用封面）
+  coverImageUrl: "https://api.elaina.cat/random/pc/"
+  # 定时推送 cron 表达式 (默认每日 06:30)
+  cron: "0 30 6 * * ?"
+  # 图片缓存有效期（小时，默认 12 小时；最大 18 小时 — 防止跨天命中旧数据）
+  cacheTtlHours: 12
+  # 清理过期缓存文件时保留的天数（防止 disk 堆积）
+  cacheKeepDays: 2
+  # 推送白名单群（仅对这些群推送），留空则使用全局白名单
+  onlyGroupID: []
+
+# ------------------------------------------------------------
+# 早晚安问候 Good Morning / Good Night
+# ------------------------------------------------------------
+goodNight:
+  # 是否启用模块
+  enabled: true
+  # 是否对触发晚安的用户进行禁言
+  muteEnabled: true
+  # 禁言时长（秒），默认 8 小时 = 28800 秒
+  muteSeconds: 28800
+  # 晚安关键词（任意一个匹配即触发）
+  goodNightKeywords: ["睡觉了", "我要睡了", "晚安", "我要休息了"]
+  # 早安关键词（任意一个匹配即触发）
+  goodMorningKeywords: ["早安", "早上好", "起床", "睡醒了"]
+  # 晚安 API 地址（返回文本问候语）
+  goodNightAPI: "https://api.ruseo.cn/api/wanan"
+  # 早安 API 地址
+  goodMorningAPI: "https://api.ruseo.cn/api/zaoan"
+  # 生效的群列表，留空则所有群生效
+  onlyGroupID: []
+
+# ------------------------------------------------------------
+# 热搜 Hot Search
+# ------------------------------------------------------------
+hotSearch:
+  # 是否启用模块
+  enabled: true
+  # 默认平台（当用户只输入 #热搜 时使用此平台）
+  # 可选: douyin weibo bilibili baidu toutiao sina genshin kuaishou xiaohongshu zhihu starrail
+  defaultPlatform: "douyin"
+  # 数据接口
+  apiUrl: "https://uapis.cn/api/v1/misc/hotboard"
+  # 生效的群列表，留空则所有群生效
+  onlyGroupID: []
+
+# ------------------------------------------------------------
+# 天气 Weather
+# ------------------------------------------------------------
+weather:
+  # 是否启用模块
+  enabled: true
+  # 默认城市（当指令未指定城市时使用此城市）
+  defaultCity: ""
+  # 天气数据接口
+  apiUrl: "https://api.suyanw.cn/api/weather.php"
+  # 生效的群列表，留空则所有群生效
+  onlyGroupID: []
+
+# ------------------------------------------------------------
+# 毒鸡汤 Dujitang
+# ------------------------------------------------------------
+dujitang:
+  # 是否启用模块
+  enabled: true
+  # 数据接口（主）
+  apiUrl: "https://api.suyanw.cn/api/djt.php"
+  # 备用数据接口（主接口失败时尝试）
+  apiUrl2: "https://v2.xxapi.cn/api/dujitang"
+  # 生效的群列表，留空则所有群生效
+  onlyGroupID: []
+
+# ------------------------------------------------------------
+# 舔狗日记 Dog Diary
+# ------------------------------------------------------------
+dogDiary:
+  # 是否启用模块
+  enabled: true
+  # 数据接口
+  apiUrl: "https://v2.xxapi.cn/api/dog"
+  # 生效的群列表，留空则所有群生效
+  onlyGroupID: []
+
+# ------------------------------------------------------------
+# Cos 图片 Cos Image
+# ------------------------------------------------------------
+cosImage:
+  # 是否启用模块
+  enabled: true
+  # 数据接口
+  apiUrl: "https://v2.xxapi.cn/api/yscos"
+  # 生效的群列表，留空则所有群生效
+  onlyGroupID: []
+
+# ------------------------------------------------------------
+# JK 图片 JK Image
+# ------------------------------------------------------------
+jkImage:
+  # 是否启用模块
+  enabled: true
+  # 数据接口
+  apiUrl: "https://api.ruseo.cn/api/jk"
+  # 生效的群列表，留空则所有群生效
+  onlyGroupID: []
+
+# ------------------------------------------------------------
+# 黑丝 图片 Black Stocking Image
+# ------------------------------------------------------------
+heisiImage:
+  # 是否启用模块
+  enabled: true
+  # 数据接口
+  apiUrl: "https://api.ruseo.cn/api/heisi"
+  # 生效的群列表，留空则所有群生效
+  onlyGroupID: []
+
+# ------------------------------------------------------------
+# 白丝 图片 White Stocking Image
+# ------------------------------------------------------------
+baisiImage:
+  # 是否启用模块
+  enabled: true
+  # 数据接口
+  apiUrl: "https://api.ruseo.cn/api/baisi"
+  # 生效的群列表，留空则所有群生效
+  onlyGroupID: []
+
+# ------------------------------------------------------------
+# KFC 疯狂星期四 KFC Crazy Thursday
+# ------------------------------------------------------------
+KFCV50:
+  # 是否启用模块
+  enabled: true
+  # 数据接口
+  apiUrl: "https://api.suyanw.cn/api/kfcyl.php?type=json"
+  # 触发关键词（任意匹配即触发）
+  triggerKeywords: ["疯狂星期四", "吃肯德基", "kfc", "KFC", "#v50", "#V50"]
+  # 生效的群列表，留空则所有群生效
+  onlyGroupID: []
+
+# ------------------------------------------------------------
+# 历史上的今天 History Today
+# ------------------------------------------------------------
+historyToday:
+  # 是否启用模块
+  enabled: true
+  # 数据接口
+  apiUrl: "https://uapis.cn/api/v1/misc/historytoday"
+  # 最多显示几条历史事件
+  maxItems: 10
+  # 生效的群列表，留空则所有群生效
+  onlyGroupID: []
+
+# ------------------------------------------------------------
+# 结婚证生成器 Marriage Certificate
+# ------------------------------------------------------------
+marriageCertificate:
+  # 是否启用模块
+  enabled: true
+  # 数据接口（返回图片，URL 中的 n1 和 n2 会自动填充姓名）
+  apiUrl: "https://www.hhlqilongzhu.cn/api/tu_jiehunzheng.php"
+  # 生效的群列表，留空则所有群生效
+  onlyGroupID: []
+
+# ------------------------------------------------------------
+# 群聊帮助 Help
+# ------------------------------------------------------------
+help:
+  # 是否启用模块
+  enabled: true
+  # 图片主标题（显示在左上角，60px 字体）
+  title: "群聊帮助"
+  # 图片副标题（显示在主标题下方，20px 字体）
+  subtitle: "mCat群聊指令查看"
+  # 背景模式：api（使用随机背景图 API）或 local（使用本地图片）
+  bgMode: "api"
+  # 背景图片 API（bgMode=api 时生效）
+  bgApiUrl: "https://api.elaina.cat/random/mobile"
+  # 本地背景图片路径（bgMode=local 时生效）
+  # 例如：C:/Users/xxx/Pictures/mybg.jpg 或 /home/xxx/bg.jpg
+  bgLocalPath: ""
+  # 生效的群列表，留空则所有群生效
+  onlyGroupID: []

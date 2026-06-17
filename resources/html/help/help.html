@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html;charset=utf-8" />
+    <link rel="stylesheet" type="text/css" href="{{pluResPath}}html/help/help.css" />
+  </head>
+  <body>
+    <div class="container" id="container">
+      {{if data.background}}
+      <div class="bg-wrap">
+        <img src="{{data.background}}" class="bg" />
+        <div class="bg-overlay"></div>
+      </div>
+      {{else}}
+      <div class="bg-fallback"></div>
+      {{/if}}
+
+      <div class="content">
+        <div class="header">
+          <div class="title">{{data.title}}</div>
+          <div class="subtitle">{{data.subtitle}}</div>
+        </div>
+
+        <div class="modules">
+          {{each data.modules mod idx}}
+          <div class="module-card {{if mod.hasAdmin}}admin-module{{/if}}">
+            <div class="module-name">{{mod.moduleName}}</div>
+            <div class="command-list">
+              {{each mod.commands cmd cidx}}
+              <div class="command-item {{if cmd.admin}}admin{{/if}}">
+                <div class="command-row">
+                  <span class="cmd-main">{{cmd.cmd}}</span>
+                  {{if cmd.admin}}
+                  <span class="admin-badge">管理员</span>
+                  {{/if}}
+                </div>
+                <div class="cmd-desc">{{cmd.desc}}</div>
+              </div>
+              {{/each}}
+            </div>
+          </div>
+          {{/each}}
+        </div>
+
+        <div class="footer">
+          <span>qunliao-plugin · mCat</span>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
