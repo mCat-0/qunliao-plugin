@@ -1,18 +1,51 @@
-import plugin from '../../../lib/plugins/plugin.js'
-import puppeteer from '../../../lib/puppeteer/puppeteer.js'
-import { segment } from 'oicq'
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { getString, getNumber, isGroupAllowed, isModuleEnabled, httpFetch } from '../components/ModuleHelper.js'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { segment } from 'oicq'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+function findYunzaiRoot (from) {
+  let cur = path.resolve(from)
+  for (let i = 0; i < 15; i++) {
+    const pluginsDir = path.join(cur, 'plugins')
+    try {
+      if (fs.existsSync(pluginsDir) && fs.statSync(pluginsDir).isDirectory()) {
+        return cur
+      }
+    } catch (_) { /* ignore */ }
+    const parent = path.dirname(cur)
+    if (parent === cur) break
+    cur = parent
+  }
+  return process.cwd()
+}
+
+const yunzaiRoot = findYunzaiRoot(__dirname).replace(/\\/g, '/')
+
+function libUrl (rel) {
+  const parts = rel.split('/').filter(Boolean)
+  const abs = path.join(yunzaiRoot, 'lib', ...parts)
+  return pathToFileURL(abs).href
+}
+
+const plugin = (await import(libUrl('plugins/plugin.js'))).default
+const puppeteer = (await import(libUrl('puppeteer/puppeteer.js'))).default
+
+const {
+  getString,
+  getNumber,
+  isGroupAllowed,
+  isModuleEnabled,
+  httpFetch
+} = await import('../components/ModuleHelper.js')
 
 const _MODULE_KEY = 'help'
 const _path = process.cwd().replace(/\\/g, '/')
 const CACHE_DIR = path.join(process.cwd().replace(/\\/g, '/'), 'data', 'cache', 'help')
 
-// 当前 help.js 文件所在目录（即 apps 目录），用于动态扫描其他模块
-const __filename = fileURLToPath(import.meta.url)
-const APPS_DIR = path.dirname(__filename).replace(/\\/g, '/')
+const APPS_DIR = __dirname.replace(/\\/g, '/')
 
 // ============================================================
 // 模块显示名称映射（用于图片展示）

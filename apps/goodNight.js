@@ -1,5 +1,37 @@
-import plugin from '../../../lib/plugins/plugin.js'
-import {
+import path from 'node:path'
+import fs from 'node:fs'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+function findYunzaiRoot (from) {
+  let cur = path.resolve(from)
+  for (let i = 0; i < 15; i++) {
+    const pluginsDir = path.join(cur, 'plugins')
+    try {
+      if (fs.existsSync(pluginsDir) && fs.statSync(pluginsDir).isDirectory()) {
+        return cur
+      }
+    } catch (_) { /* ignore */ }
+    const parent = path.dirname(cur)
+    if (parent === cur) break
+    cur = parent
+  }
+  return process.cwd()
+}
+
+const yunzaiRoot = findYunzaiRoot(__dirname).replace(/\\/g, '/')
+
+function libUrl (rel) {
+  const parts = rel.split('/').filter(Boolean)
+  const abs = path.join(yunzaiRoot, 'lib', ...parts)
+  return pathToFileURL(abs).href
+}
+
+const plugin = (await import(libUrl('plugins/plugin.js'))).default
+
+const {
   isModuleEnabled,
   isGroupAllowed,
   getString,
@@ -7,7 +39,7 @@ import {
   getBoolean,
   getStringList,
   httpFetch
-} from '../components/ModuleHelper.js'
+} = await import('../components/ModuleHelper.js')
 
 const _MODULE_KEY = 'goodNight'
 const DEFAULT_GOOD_NIGHT_KW = ['睡觉了', '我要睡了', '晚安', '我要休息了']

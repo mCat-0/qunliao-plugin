@@ -18,6 +18,61 @@ const platformOptions = [
   { label: "星铁", value: "starrail" }
 ]
 
+// 背景图分类 category 可选项（通用）
+const bgCategoryOptions = [
+  { label: "手机壁纸 mobile_wallpaper", value: "mobile_wallpaper" },
+  { label: "电脑壁纸 pc_wallpaper", value: "pc_wallpaper" },
+  { label: "二次元 acg（可配置 type）", value: "acg" },
+  { label: "表情包 bq（可配置 type）", value: "bq" },
+  { label: "福瑞 furry（可配置 type）", value: "furry" },
+  { label: "混合动漫 anime / landscape", value: "landscape" },
+  { label: "混合动漫 general_anime", value: "general_anime" },
+  { label: "AI 绘画 ai_drawing", value: "ai_drawing" }
+]
+
+// 仅 acg 允许的 type 选项
+const bgTypeAcgOptions = [
+  { label: "pc 壁纸", value: "pc" },
+  { label: "mb 手机", value: "mb" }
+]
+// 仅 bq 允许的 type 选项
+const bgTypeBqOptions = [
+  { label: "xiongmao 熊猫", value: "xiongmao" },
+  { label: "waiguoren 外国人", value: "waiguoren" },
+  { label: "maomao 猫猫", value: "maomao" },
+  { label: "ikun", value: "ikun" },
+  { label: "eciyuan 二次元", value: "eciyuan" }
+]
+// 仅 furry 允许的 type 选项
+const bgTypeFurryOptions = [
+  { label: "z4k", value: "z4k" },
+  { label: "szs8k 竖屏8k", value: "szs8k" },
+  { label: "s4k 横屏4k", value: "s4k" },
+  { label: "4k", value: "4k" }
+]
+
+// 背景图 type 总选项（按 category 分组展示，实际值均为合法值）
+const bgTypeOptions = [
+  { label: "不使用 type（留空）", value: "" },
+
+  // --- acg 对应的 type ---
+  { label: "[acg] pc 壁纸", value: "pc" },
+  { label: "[acg] mb 手机", value: "mb" },
+
+  // --- bq 对应的 type ---
+  { label: "[bq] xiongmao 熊猫", value: "xiongmao" },
+  { label: "[bq] waiguoren 外国人", value: "waiguoren" },
+  { label: "[bq] maomao 猫猫", value: "maomao" },
+  { label: "[bq] ikun", value: "ikun" },
+  { label: "[bq] eciyuan 二次元", value: "eciyuan" },
+
+  // --- furry 对应的 type ---
+  { label: "[furry] z4k", value: "z4k" },
+  { label: "[furry] szs8k 竖屏8k", value: "szs8k" },
+  { label: "[furry] s4k 横屏4k", value: "s4k" },
+  { label: "[furry] 4k", value: "4k" }
+]
+
 export function supportGuoba() {
   // 群列表（在被调用时动态生成，此时 Bot 已经登录）
   let groupList = []
@@ -270,6 +325,76 @@ export function supportGuoba() {
           component: "Input"
         },
         {
+          field: "hotSearch.bgBaseUrl",
+          label: "背景图 API",
+          bottomHelpMessage: "默认 https://uapis.cn/api/v1/random/image；留空即使用默认",
+          component: "Input",
+          componentProps: { placeholder: "https://uapis.cn/api/v1/random/image" }
+        },
+        {
+          field: "hotSearch.bgCategory",
+          label: "背景图 category",
+          bottomHelpMessage: "选择图片分类；acg / bq / furry 可再设置下方 type",
+          component: "Select",
+          componentProps: { options: bgCategoryOptions }
+        },
+        {
+          field: "hotSearch.bgType",
+          label: "背景图 type",
+          bottomHelpMessage: "仅当 bgCategory 为 acg / bq / furry 时才生效；其它分类请选「不使用 type」",
+          component: "Select",
+          componentProps: { options: bgTypeOptions }
+        },
+        {
+          field: "hotSearch.bgCustomUrl",
+          label: "背景图自定义 URL",
+          bottomHelpMessage: "填此则跳过 category/type 拼装，直接使用该 URL 作为背景图",
+          component: "Input",
+          componentProps: { placeholder: "留空则使用 category/type 拼装" }
+        },
+        {
+          field: "hotSearch.glassEnabled",
+          label: "启用毛玻璃",
+          bottomHelpMessage: "关闭后内容区退化为纯色半透明卡片",
+          component: "Switch",
+          componentProps: { checkedValue: true, uncheckedValue: false }
+        },
+        {
+          field: "hotSearch.glassBlur",
+          label: "模糊半径(px)",
+          bottomHelpMessage: "值越大越模糊，建议 4~24",
+          component: "InputNumber",
+          componentProps: { min: 0, max: 60, step: 1, placeholder: "14" }
+        },
+        {
+          field: "hotSearch.glassSaturate",
+          label: "饱和度(%)",
+          bottomHelpMessage: "100 为不变，增大可让底色更鲜艳，建议 100~180",
+          component: "InputNumber",
+          componentProps: { min: 0, max: 300, step: 10, placeholder: "140" }
+        },
+        {
+          field: "hotSearch.glassOpacity",
+          label: "卡片不透明度",
+          bottomHelpMessage: "0~1，越大越不透明，建议 0.25~0.55",
+          component: "InputNumber",
+          componentProps: { min: 0, max: 1, step: 0.05, placeholder: "0.35" }
+        },
+        {
+          field: "hotSearch.glassBorder",
+          label: "边框颜色",
+          bottomHelpMessage: "支持 #rrggbb / rgba(...)，留空使用默认",
+          component: "Input",
+          componentProps: { placeholder: "rgba(255,255,255,0.18)" }
+        },
+        {
+          field: "hotSearch.glassRadius",
+          label: "圆角(px)",
+          bottomHelpMessage: "卡片圆角大小，建议 8~24",
+          component: "InputNumber",
+          componentProps: { min: 0, max: 48, step: 2, placeholder: "16" }
+        },
+        {
           field: "hotSearch.onlyGroupID",
           label: "白名单群",
           bottomHelpMessage: "仅在这些群生效，留空则所有群均生效",
@@ -311,6 +436,76 @@ export function supportGuoba() {
           label: "天气 API",
           bottomHelpMessage: "天气数据接口地址",
           component: "Input"
+        },
+        {
+          field: "weather.bgBaseUrl",
+          label: "背景图 API",
+          bottomHelpMessage: "默认 https://uapis.cn/api/v1/random/image；留空即使用默认",
+          component: "Input",
+          componentProps: { placeholder: "https://uapis.cn/api/v1/random/image" }
+        },
+        {
+          field: "weather.bgCategory",
+          label: "背景图 category",
+          bottomHelpMessage: "选择图片分类；acg / bq / furry 可再设置下方 type",
+          component: "Select",
+          componentProps: { options: bgCategoryOptions }
+        },
+        {
+          field: "weather.bgType",
+          label: "背景图 type",
+          bottomHelpMessage: "仅当 bgCategory 为 acg / bq / furry 时才生效；其它分类请选「不使用 type」",
+          component: "Select",
+          componentProps: { options: bgTypeOptions }
+        },
+        {
+          field: "weather.bgCustomUrl",
+          label: "背景图自定义 URL",
+          bottomHelpMessage: "填此则跳过 category/type 拼装，直接使用该 URL 作为背景图",
+          component: "Input",
+          componentProps: { placeholder: "留空则使用 category/type 拼装" }
+        },
+        {
+          field: "weather.glassEnabled",
+          label: "启用毛玻璃",
+          bottomHelpMessage: "关闭后内容区退化为纯色半透明卡片",
+          component: "Switch",
+          componentProps: { checkedValue: true, uncheckedValue: false }
+        },
+        {
+          field: "weather.glassBlur",
+          label: "模糊半径(px)",
+          bottomHelpMessage: "值越大越模糊，建议 4~24",
+          component: "InputNumber",
+          componentProps: { min: 0, max: 60, step: 1, placeholder: "14" }
+        },
+        {
+          field: "weather.glassSaturate",
+          label: "饱和度(%)",
+          bottomHelpMessage: "100 为不变，增大可让底色更鲜艳，建议 100~180",
+          component: "InputNumber",
+          componentProps: { min: 0, max: 300, step: 10, placeholder: "140" }
+        },
+        {
+          field: "weather.glassOpacity",
+          label: "卡片不透明度",
+          bottomHelpMessage: "0~1，越大越不透明，建议 0.25~0.55",
+          component: "InputNumber",
+          componentProps: { min: 0, max: 1, step: 0.05, placeholder: "0.35" }
+        },
+        {
+          field: "weather.glassBorder",
+          label: "边框颜色",
+          bottomHelpMessage: "支持 #rrggbb / rgba(...)，留空使用默认",
+          component: "Input",
+          componentProps: { placeholder: "rgba(255,255,255,0.18)" }
+        },
+        {
+          field: "weather.glassRadius",
+          label: "圆角(px)",
+          bottomHelpMessage: "卡片圆角大小，建议 8~24",
+          component: "InputNumber",
+          componentProps: { min: 0, max: 48, step: 2, placeholder: "16" }
         },
         {
           field: "weather.onlyGroupID",

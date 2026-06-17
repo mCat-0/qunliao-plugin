@@ -1,14 +1,45 @@
-import plugin from '../../../lib/plugins/plugin.js'
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { execSync } from 'node:child_process'
-import {
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+function findYunzaiRoot (from) {
+  let cur = path.resolve(from)
+  for (let i = 0; i < 15; i++) {
+    const pluginsDir = path.join(cur, 'plugins')
+    try {
+      if (fs.existsSync(pluginsDir) && fs.statSync(pluginsDir).isDirectory()) {
+        return cur
+      }
+    } catch (_) { /* ignore */ }
+    const parent = path.dirname(cur)
+    if (parent === cur) break
+    cur = parent
+  }
+  return process.cwd()
+}
+
+const yunzaiRoot = findYunzaiRoot(__dirname).replace(/\\/g, '/')
+
+function libUrl (rel) {
+  const parts = rel.split('/').filter(Boolean)
+  const abs = path.join(yunzaiRoot, 'lib', ...parts)
+  return pathToFileURL(abs).href
+}
+
+const plugin = (await import(libUrl('plugins/plugin.js'))).default
+
+const {
   isModuleEnabled,
   isGroupAllowed,
   getString,
   getStringList
-} from '../components/ModuleHelper.js'
-import { pluginRoot, pluginConfigDir } from '../model/path.js'
+} = await import('../components/ModuleHelper.js')
+
+const { pluginRoot, pluginConfigDir } = await import('../model/path.js')
 
 const _MODULE_KEY = 'update'
 let isUpdating = false

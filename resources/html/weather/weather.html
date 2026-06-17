@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html;charset=utf-8" />
+    <link rel="stylesheet" type="text/css" href="{{pluResPath}}html/weather/weather.css" />
+    <style>{{data.glassStyle}}</style>
+  </head>
+  <body>
+    <div class="container" id="container">
+      <div class="bg">
+        <img src="{{data.cover}}" class="bg-img" onerror="this.parentNode.classList.add('no-bg')" />
+        <div class="bg-mask"></div>
+      </div>
+
+      <div class="header card">
+        <div class="title">&#127780; {{data.city}} · 实时天气</div>
+        <div class="subtitle">{{data.date}}{{if data.time}} · {{data.time}}{{/if}}</div>
+      </div>
+
+      <div class="now card">
+        <div class="now-temp">{{data.currentTemp}}&#176;C</div>
+        <div class="now-weather">{{data.currentWeather}}</div>
+        <div class="now-range">今日 {{data.minTemp}}&#176;C ~ {{data.maxTemp}}&#176;C</div>
+        <div class="now-extra">
+          <div>&#128168; {{data.wind}}</div>
+          <div>&#128166; 湿度 {{data.humidity}}</div>
+          <div>&#128065; 能见度 {{data.visibility}}</div>
+          <div>&#127811; 空气 {{data.air}}</div>
+        </div>
+      </div>
+
+      {{if data.items}}
+      <div class="forecast card">
+        <div class="forecast-title">&#128203; 生活指数</div>
+        {{each data.items item}}
+        <div class="forecast-row">
+          <div class="forecast-name">{{item.name}}</div>
+          <div class="forecast-value">
+            <div class="forecast-index">{{item.index}}</div>
+            <div class="forecast-tips">{{item.tips}}</div>
+          </div>
+        </div>
+        {{/each}}
+      </div>
+      {{/if}}
+
+      <div class="footer">
+        <span>数据来源：suyanw.cn · mCat 群聊插件</span>
+      </div>
+    </div>
+  </body>
+</html>

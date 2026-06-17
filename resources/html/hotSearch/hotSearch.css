@@ -1,0 +1,134 @@
+@font-face {
+  font-family: 'DouyinSans';
+  font-weight: bold;
+  src: url('../../fonts/DouyinSansBold.ttf') format('truetype');
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'DouyinSans', sans-serif;
+  color: #fff;
+  -webkit-font-smoothing: antialiased;
+}
+
+.container {
+  position: relative;
+  width: 1000px;
+  min-height: 600px;
+  padding: 56px;
+  overflow: hidden;
+}
+
+.bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.bg-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.bg-mask {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.75) 100%),
+    linear-gradient(90deg, rgba(0,0,0,0.25) 0%, rgba(0,0,0,0.05) 40%, rgba(0,0,0,0.25) 100%);
+}
+.no-bg { background: linear-gradient(135deg, #3a1c71 0%, #d76d77 50%, #ffaf7b 100%); }
+
+/* 毛玻璃卡片 —— 所有主要内容区域共用。
+   参数通过 JS 在 <style> 里注入 :root{--glass-xxx: ...} */
+.card {
+  position: relative;
+  z-index: 1;
+  background: var(--glass-bg, rgba(0, 0, 0, 0.35));
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.18));
+  border-radius: var(--glass-radius, 16px);
+  backdrop-filter: var(--glass-filter, blur(14px) saturate(140%));
+  -webkit-backdrop-filter: var(--glass-filter, blur(14px) saturate(140%));
+}
+
+.header {
+  padding: 24px 28px;
+  margin-bottom: 24px;
+}
+.header .title {
+  font-family: 'DouyinSans', sans-serif;
+  font-weight: bold;
+  font-size: 40px;
+  letter-spacing: 2px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.45);
+}
+.header .subtitle {
+  margin-top: 8px;
+  font-size: 18px;
+  opacity: 0.9;
+}
+
+.list {
+  padding: 12px 20px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 8px;
+  border-bottom: 1px dashed rgba(255,255,255,0.18);
+}
+.row:last-child { border-bottom: none; }
+
+.rank {
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  line-height: 48px;
+  text-align: center;
+  border-radius: 12px;
+  font-family: 'DouyinSans', sans-serif;
+  font-weight: bold;
+  font-size: 22px;
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+}
+.rank-1 { background: linear-gradient(135deg, #ff4b2b, #ff416c); box-shadow: 0 4px 14px rgba(255, 65, 108, 0.45); }
+.rank-2 { background: linear-gradient(135deg, #ff7b00, #ffa751); box-shadow: 0 4px 12px rgba(255, 123, 0, 0.35); }
+.rank-3 { background: linear-gradient(135deg, #f7971e, #ffd200); color: #3a1c71; box-shadow: 0 4px 12px rgba(255, 210, 0, 0.35); }
+
+.title-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.t1 {
+  font-size: 24px;
+  line-height: 1.35;
+  font-weight: 500;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.45);
+}
+.hot {
+  font-size: 15px;
+  opacity: 0.9;
+  color: #ffe7b3;
+}
+
+.footer {
+  position: relative;
+  z-index: 1;
+  margin-top: 24px;
+  padding-top: 12px;
+  text-align: right;
+  font-size: 14px;
+  opacity: 0.75;
+}

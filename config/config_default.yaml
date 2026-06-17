@@ -62,6 +62,27 @@ hotSearch:
   defaultPlatform: "douyin"
   # 数据接口
   apiUrl: "https://uapis.cn/api/v1/misc/hotboard"
+  # 背景图 API 基址（默认为 uapis.cn 随机图）
+  bgBaseUrl: "https://uapis.cn/api/v1/random/image"
+  # 背景图分类 category（acg | bq | furry | mobile_wallpaper | pc_wallpaper | general_anime | ai_drawing | landscape）
+  bgCategory: "mobile_wallpaper"
+  # 背景图分类 type（仅 acg/bq/furry 生效；其它分类可留空）
+  bgType: ""
+  # 背景图自定义 URL（填此则跳过 category/type 拼装）
+  bgCustomUrl: ""
+  # ---------- 毛玻璃卡片 ----------
+  # 是否启用毛玻璃（false 时退化为纯色半透明卡片）
+  glassEnabled: true
+  # 模糊半径（px，建议 0~24，越大越模糊）
+  glassBlur: 3
+  # 饱和度（%，建议 100~180；=100 表示不增强色彩）
+  glassSaturate: 140
+  # 背景不透明度（0~1，越大越不透明；建议 0.25~0.55）
+  glassOpacity: 0.35
+  # 边框颜色（rgba/rgb/#xxxxxx 都可）
+  glassBorder: "rgba(255,255,255,0.18)"
+  # 圆角（px，建议 8~24）
+  glassRadius: 16
   # 生效的群列表，留空则所有群生效
   onlyGroupID: []
 
@@ -75,6 +96,21 @@ weather:
   defaultCity: ""
   # 天气数据接口
   apiUrl: "https://api.suyanw.cn/api/weather.php"
+  # 背景图 API 基址
+  bgBaseUrl: "https://uapis.cn/api/v1/random/image"
+  # 背景图分类 category（acg | bq | furry | mobile_wallpaper | pc_wallpaper | general_anime | ai_drawing | landscape）
+  bgCategory: "acg"
+  # 背景图分类 type（仅 acg / bq / furry 时生效；本模块默认 mb=手机壁纸）
+  bgType: "mb"
+  # 背景图自定义 URL（填此则跳过 category/type 拼装）
+  bgCustomUrl: ""
+  # ---------- 毛玻璃卡片 ----------
+  glassEnabled: true
+  glassBlur: 3
+  glassSaturate: 140
+  glassOpacity: 0.35
+  glassBorder: "rgba(255,255,255,0.18)"
+  glassRadius: 16
   # 生效的群列表，留空则所有群生效
   onlyGroupID: []
 
