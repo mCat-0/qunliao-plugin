@@ -824,6 +824,13 @@ export function supportGuoba() {
           componentProps: { placeholder: "留空或填 GitLab Personal Access Token", type: "password" }
         },
         {
+          field: "update.sshKeyPath",
+          label: "SSH 私钥路径",
+          bottomHelpMessage: "SSH key 非默认文件名时填（如 ~/.ssh/id_ed25519_qunliao），留空则用 SSH 默认",
+          component: "Input",
+          componentProps: { placeholder: "留空 或 ~/.ssh/id_ed25519_qunliao" }
+        },
+        {
           field: "update.extraAdminQQ",
           label: "额外管理员 QQ",
           bottomHelpMessage: "除 Yunzai 内置 master 外，允许使用更新指令的 QQ 号。留空则只有 Bot 主人可用",

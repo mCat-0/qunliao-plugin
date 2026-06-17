@@ -13,35 +13,59 @@ import { pluginRoot, pluginConfigDir } from '../model/path.js'
 
 const _MODULE_KEY = 'update'
 
-// 平台 → Git 远端 URL 映射（先试 SSH，失败再试 HTTPS）
+// 平台 → Git 远端 URL 映射
+// - GitHub/Gitee：公开仓库，HTTPS 匿名即可访问
+// - GitLab：先试 HTTPS（公开仓库），失败再试 SSH
 const gitRemoteUrls = {
   github: {
-    ssh: 'git@github.com:mCat-0/qunliao-plugin.git',
-    https: 'https://github.com/mCat-0/qunliao-plugin.git'
+    https: 'https://github.com/mCat-0/qunliao-plugin.git',
+    ssh: 'git@github.com:mCat-0/qunliao-plugin.git'
   },
   gitee: {
-    ssh: 'git@gitee.com:mcat0/qunliao-plugin.git',
-    https: 'https://gitee.com/mcat0/qunliao-plugin.git'
+    https: 'https://gitee.com/mcat0/qunliao-plugin.git',
+    ssh: 'git@gitee.com:mcat0/qunliao-plugin.git'
   },
   gitlab: {
-    ssh: 'git@gitlab.com:mCat0/qunliao-plugin.git',
-    https: 'https://gitlab.com/mCat0/qunliao-plugin.git'
+    https: 'https://gitlab.com/mCat0/qunliao-plugin.git',
+    ssh: 'git@gitlab.com:mCat0/qunliao-plugin.git'
   }
 }
 
-// 安全执行 git 命令，返回 { ok, stdout } 或 { ok, error }
-// - 禁用 SSH host key 交互确认（避免首次连接挂起）
-// - 禁用终端密码提示（GIT_TERMINAL_PROMPT=0，失败快退而非挂起等待输入）
-function runGit(cmd) {
+// 安全执行 git 命令
+// opts.sshKeyPath: 可选，指定 SSH 私钥路径（如 ~/.ssh/id_ed25519_qunliao）
+// opts.isHttps: HTTPS URL 时禁用 SSH 相关，且关闭 credential helper 防止强制登录
+function runGit(cmd, opts) {
+  opts = opts || {}
   try {
     const userKnownHosts = process.platform === 'win32' ? 'NUL' : '/dev/null'
     const env = Object.assign({}, process.env, {
-      'GIT_SSH_COMMAND': 'ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=' + userKnownHosts + ' -o BatchMode=yes',
       'GIT_TERMINAL_PROMPT': '0',
-      'GCM_INTERACTIVE': 'Never',
-      'SSH_ASKPASS': '',
-      'DISPLAY': ''
+      'GCM_INTERACTIVE': 'Never'
     })
+    if (opts.isHttps) {
+      // HTTPS 模式：完全禁用凭证链，走纯匿名访问
+      env.GIT_SSH_COMMAND = ''
+      env.SSH_ASKPASS = ''
+      env.DISPLAY = ''
+    } else {
+      // SSH 模式：可指定私钥路径，禁用 host key 交互
+      let sshCmd = 'ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=' + userKnownHosts + ' -o BatchMode=yes'
+      let keyPath = opts.sshKeyPath ? String(opts.sshKeyPath).trim() : ''
+      if (keyPath) {
+        // ~/ 展开为 USERPROFILE / HOME
+        if (keyPath.startsWith('~') || keyPath.startsWith('$HOME')) {
+          const home = process.env.USERPROFILE || process.env.HOME || ''
+          keyPath = home + keyPath.replace(/^(\$HOME|~)/, '')
+        }
+        // 路径含空格时加引号
+        if (keyPath.indexOf(' ') >= 0) {
+          sshCmd = sshCmd + ' -i "' + keyPath + '"'
+        } else {
+          sshCmd = sshCmd + ' -i ' + keyPath
+        }
+      }
+      env.GIT_SSH_COMMAND = sshCmd
+    }
     const stdout = execSync(cmd, {
       cwd: pluginRoot,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -76,34 +100,41 @@ function getPlatformBranch(key, cfg) {
 }
 
 // 通过 Git 执行更新
-// - update 模式：git pull <remote_url> <branch>，不触碰 .gitignore 中的文件
-// - repair 模式：git fetch + git reset --hard + 清除用户配置
+// - update 模式：git pull <remote_url> <branch>
+// - repair 模式：git fetch + git reset --hard FETCH_HEAD
+// - 先试 HTTPS（禁用 credential helper，匿名访问公开仓库），失败再试 SSH（需本地 SSH key）
 async function tryGitCommand(platformKey, cfg, mode) {
   if (!isGitRepo()) throw new Error('本地目录不是 Git 仓库（无 .git），已跳过 Git 更新流程')
 
   const urls = gitRemoteUrls[platformKey]
   if (!urls) throw new Error('未知平台: ' + platformKey)
   const branch = getPlatformBranch(platformKey, cfg)
+  const sshKey = (cfg && cfg.sshKeyPath) ? String(cfg.sshKeyPath).trim() : ''
 
-  // 先尝试 SSH，失败再试 HTTPS
-  const urlCandidates = [urls.ssh, urls.https]
+  // HTTPS 先试（公开仓库免认证），失败再试 SSH
+  const candidates = [
+    { url: urls.https, isHttps: true },
+    { url: urls.ssh, isHttps: false }
+  ]
   let lastErr = null
-  for (const url of urlCandidates) {
+  for (const cand of candidates) {
     try {
+      // HTTPS: -c credential.helper= 禁用任何凭证助手，强制匿名
+      const prefix = cand.isHttps ? 'git -c credential.helper= ' : 'git '
       if (mode === 'update') {
-        // 更新模式：git pull，保留本地未追踪文件（如用户自己的 config.yaml）
-        const r = runGit('git pull "' + url + '" ' + branch)
+        const r = runGit(prefix + 'pull "' + cand.url + '" ' + branch,
+          { isHttps: cand.isHttps, sshKeyPath: cand.isHttps ? '' : sshKey })
         if (!r.ok) { lastErr = r.error; continue }
-        return { method: 'git', detail: 'pull ' + url + ' ' + branch, stdout: r.stdout }
+        return { method: 'git', detail: 'pull ' + cand.url + ' ' + branch, stdout: r.stdout }
       } else {
-        // 修复模式：fetch → reset --hard → 清除用户配置
-        const f = runGit('git fetch "' + url + '" ' + branch)
+        // repair 模式
+        const f = runGit(prefix + 'fetch "' + cand.url + '" ' + branch,
+          { isHttps: cand.isHttps, sshKeyPath: cand.isHttps ? '' : sshKey })
         if (!f.ok) { lastErr = f.error; continue }
         const reset = runGit('git reset --hard FETCH_HEAD')
         if (!reset.ok) { lastErr = reset.error; continue }
-        const clean = runGit('git clean -fd')
-        if (!clean.ok) { lastErr = clean.error; continue }
-        return { method: 'git', detail: 'reset --hard ' + url + ' ' + branch, stdout: reset.stdout }
+        runGit('git clean -fd')
+        return { method: 'git', detail: 'reset --hard ' + cand.url + ' ' + branch, stdout: reset.stdout }
       }
     } catch (e) {
       lastErr = e.message || String(e)
@@ -231,6 +262,7 @@ function getUpdateConfig() {
     giteePassword: '',
     gitlabBranch: 'main',
     gitlabAccessToken: '',
+    sshKeyPath: '',
     extraAdminQQ: [],
     enabled: true
   }
@@ -241,7 +273,8 @@ function getUpdateConfig() {
   const keys = [
     'githubBranch', 'githubProxy',
     'giteeBranch', 'giteeUsername', 'giteePassword',
-    'gitlabBranch', 'gitlabAccessToken'
+    'gitlabBranch', 'gitlabAccessToken',
+    'sshKeyPath'
   ]
   for (const k of keys) {
     try {
