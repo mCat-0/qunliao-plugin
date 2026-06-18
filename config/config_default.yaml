@@ -128,7 +128,7 @@ bilitvPush:
   # 兜底扫描间隔（小时），确保即便 cron 小时都没触发，也会定期扫描一次
   scanIntervalHours: 8
   # 单个直播间的冷却时间（小时）：同一 roomId 在冷却期内不会重复推送；0 表示关闭去重
-  cooldownHours: 12
+  cooldownHours: 2
   # 推送目标群：留空则继承 Yunzai 的全局 onlyGroupID；填数字群号逗号分隔
   whitelistGroups: ""
   # 允许执行 #B站推送 / #B站全部推送 / #群聊插件版本 的额外管理员 QQ

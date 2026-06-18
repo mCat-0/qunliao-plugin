@@ -557,6 +557,13 @@ export function supportGuoba() {
           componentProps: { min: 1, max: 240, step: 1, placeholder: "8" }
         },
         {
+          field: "bilitvPush.cooldownHours",
+          label: "同一直播间冷却(小时)",
+          bottomHelpMessage: "同一个直播间在该时长内不会重复推送；0 表示关闭去重；默认 2",
+          component: "InputNumber",
+          componentProps: { min: 0, max: 240, step: 1, placeholder: "2" }
+        },
+        {
           field: "bilitvPush.nightScanEnabled",
           label: "夜间是否扫描",
           bottomHelpMessage: "关闭后，在夜间时段内不扫描；夜间时段可在下方自定义",

@@ -394,23 +394,25 @@ async function pushToCurrentGroup (e, cards) {
 }
 
 // ===== 定时器 & 去重 =====
-// - 启动时仅注册一次 setInterval（单例保护）
-// - 每次调度使用 isRunning 标志，避免上一次未完成时再次触发
+// 优先级：指令扫描(3) > 定时扫描(2) > 间隔自动扫描(1)
+// - 高优先级可抢占低优先级；低优先级不能打断高优先级
 // - 对每个直播间（roomId）做冷却去重：同一 roomId 在 cooldownHours 内只推送一次
+// - 指令扫描不影响 lastPushAt，避免管理员手动触发后定时扫描一直被跳过
 let scheduleState = {
-  lastPushAt: 0,
+  lastScheduledPushAt: 0,   // 定时/间隔调度的实际推送时间（用于判断间隔是否到期）
+  lastIntervalCheckedAt: 0, // 「兜底间隔」上次检查并执行的时间
   pushedTodayHours: new Set(),
   currentDateKey: '',
   intervalTimer: null,
   startedAt: 0,
-  isRunning: false,
-  pushedRoomIds: new Map() // Map<roomId, lastPushedAtMs>
+  runningPriority: 0,       // 当前运行中扫描的优先级；0 表示空闲
+  pushedRoomIds: new Map()  // Map<roomId, lastPushedAtMs>
 }
 
-// 冷却时间（小时）：默认 12h；可通过配置项 cooldownHours 调整
+// 冷却时间（小时）：默认 2h；可通过配置项 cooldownHours 调整；0 表示关闭去重
 function getCooldownHours () {
-  const v = cfgNum('cooldownHours', 12)
-  if (!isFinite(v) || v < 0) return 12
+  const v = cfgNum('cooldownHours', 2)
+  if (!isFinite(v) || v < 0) return 2
   return v
 }
 
@@ -443,34 +445,45 @@ function markRoomsPushed (cards) {
   }
 }
 
-async function doScheduledPush () {
+// priority: 1=间隔自动, 2=定时扫描, 3=指令扫描
+// - 高优先级可抢占低优先级；低/等优先级请求在有扫描进行中被跳过
+// - 指令扫描不影响 lastScheduledPushAt，避免管理员触发后影响定时/间隔
+async function doScheduledPush (priority = 1) {
   if (!isModuleEnabled(_MODULE_KEY)) return
   if (isScheduleBlocked()) return
-  if (scheduleState.isRunning) return      // 防止上一轮没完成就再次并发
-  scheduleState.isRunning = true
+  const runningPriority = scheduleState.runningPriority
+  if (runningPriority > 0 && priority <= runningPriority) {
+    logger.mark('[bilitvPush] 已存在优先级 ' + runningPriority + ' 的扫描在运行；当前请求优先级 ' + priority + '，跳过')
+    return
+  }
+  scheduleState.runningPriority = priority
   try {
     const { cards } = await scanLiveUPs()
     if (cards.length === 0) return
-    // 过滤：去掉仍在冷却期的直播间，避免同一直播反复推送
     const filtered = cards.filter((c) => !isRoomInCooldown(c && c.roomId))
+    const skippedByCooldown = cards.length - filtered.length
     if (filtered.length === 0) {
       logger.mark('[bilitvPush] 直播中 ' + cards.length + ' 个，但均在冷却期内，跳过')
       return
     }
     const r = await pushToAllWhitelistGroups(filtered)
-    if (r && r.groups > 0) markRoomsPushed(filtered)
-    logger.mark('[bilitvPush] 定时扫描完成：直播中 ' + cards.length + ' 个（本次推送 ' + filtered.length + ' 个，冷却跳过 ' + (cards.length - filtered.length) + ' 个），已推送 ' + (r ? r.groups : 0) + ' 个群')
+    if (r && r.groups > 0) {
+      markRoomsPushed(filtered)
+      // 仅定时/间隔调度更新 lastScheduledPushAt；指令扫描不影响调度节奏
+      if (priority <= 2) scheduleState.lastScheduledPushAt = Date.now()
+    }
+    logger.mark('[bilitvPush] 扫描完成(优先级=' + priority + ')：直播中 ' + cards.length + ' 个（本次推送 ' + filtered.length + ' 个，冷却跳过 ' + skippedByCooldown + ' 个），已推送 ' + (r ? r.groups : 0) + ' 个群')
   } catch (err) {
-    try { logger.error('[bilitvPush] 定时扫描异常: ' + (err && err.message)) } catch (_) { /* ignore */ }
+    try { logger.error('[bilitvPush] 扫描(优先级=' + priority + ') 异常: ' + (err && err.message)) } catch (_) { /* ignore */ }
   } finally {
-    scheduleState.isRunning = false
+    scheduleState.runningPriority = 0
   }
 }
 
 function ensureScheduleStart () {
   if (scheduleState.intervalTimer) return
   scheduleState.startedAt = Date.now()
-  // 每 60 秒检查一次：命中 cronHours 整点 或 达到 scanIntervalHours 兜底间隔
+  // 每 60 秒检查一次：命中 cronHours 整点（优先级2） 或 达到 scanIntervalHours 兜底间隔（优先级1）
   scheduleState.intervalTimer = setInterval(() => {
     try {
       const key = todayKey()
@@ -479,23 +492,23 @@ function ensureScheduleStart () {
         scheduleState.pushedTodayHours = new Set()
       }
       const hh = nowHH()
-      // 夜间时段：直接跳过（不影响 lastPushAt，不影响 pushedTodayHours 的清除）
       if (isScheduleBlocked()) return
       const cronHours = getCronHours()
       if (cronHours.includes(hh) && !scheduleState.pushedTodayHours.has(hh)) {
         scheduleState.pushedTodayHours.add(hh)
-        doScheduledPush()
+        doScheduledPush(2) // 定时扫描：优先级 2
       }
       const intervalMs = getIntervalHours() * 60 * 60 * 1000
-      if (Date.now() - scheduleState.lastPushAt >= intervalMs) {
-        scheduleState.lastPushAt = Date.now()
-        doScheduledPush()
+      const lastAt = scheduleState.lastScheduledPushAt || scheduleState.startedAt
+      if (Date.now() - lastAt >= intervalMs) {
+        scheduleState.lastScheduledPushAt = Date.now()
+        doScheduledPush(1) // 兜底间隔扫描：优先级 1
       }
     } catch (_) { /* ignore */ }
   }, 60 * 1000)
 
   // 启动时立即执行一次（仅一次；若当前处于夜间或模块关闭则内部自动返回）
-  setTimeout(() => doScheduledPush(), 3000)
+  setTimeout(() => doScheduledPush(2), 3000)
 }
 
 // ===== 指令入口 =====
@@ -520,27 +533,67 @@ export class BiliTVPush extends plugin {
     if (!isModuleEnabled(_MODULE_KEY)) return this.reply('B站推送功能已禁用')
     if (!isAdminUser(e)) return this.reply('仅管理员可使用该指令')
 
-    await this.reply('正在扫描订阅UP的直播状态，请稍候...')
-    const { cards } = await scanLiveUPs()
-    if (cards.length === 0) {
-      return this.reply('当前订阅的UP均未开播')
+    // 指令扫描（优先级3）：可抢占低优先级调度
+    if (scheduleState.runningPriority > 0 && 3 <= scheduleState.runningPriority) {
+      return this.reply('已存在其他扫描任务在运行，请稍后再试')
     }
-    const ok = await pushToCurrentGroup(e, cards)
-    if (!ok) return
+    scheduleState.runningPriority = 3
+    try {
+      await this.reply('正在扫描订阅UP的直播状态，请稍候...')
+      const { cards } = await scanLiveUPs()
+      if (cards.length === 0) {
+        return this.reply('当前订阅的UP均未开播')
+      }
+      // 指令「仅推当前群」也尊重冷却，避免群内重复推送同一 roomId
+      const filtered = cards.filter((c) => !isRoomInCooldown(c && c.roomId))
+      const skipped = cards.length - filtered.length
+      if (filtered.length === 0) {
+        return this.reply('直播中 ' + cards.length + ' 个，但均在冷却期内（' + getCooldownHours() + 'h），本次不推送')
+      }
+      const ok = await pushToCurrentGroup(e, filtered)
+      if (ok) {
+        markRoomsPushed(filtered)
+        if (skipped > 0) {
+          return this.reply('直播中 ' + cards.length + ' 个，本次推送 ' + filtered.length + ' 个，冷却跳过 ' + skipped + ' 个（冷却 ' + getCooldownHours() + 'h）')
+        }
+      }
+    } finally {
+      scheduleState.runningPriority = 0
+    }
   }
 
   async pushAll (e) {
     if (!isModuleEnabled(_MODULE_KEY)) return this.reply('B站推送功能已禁用')
     if (!isAdminUser(e)) return this.reply('仅管理员可使用该指令')
 
-    await this.reply('正在扫描订阅UP的直播状态，并向全部白名单群推送，请稍候...')
-    const { cards } = await scanLiveUPs()
-    if (cards.length === 0) {
-      return this.reply('当前订阅的UP均未开播')
+    // 指令扫描（优先级3）：可抢占低优先级调度；但如果已有高/同优先级运行则拒绝
+    const runningPriority = scheduleState.runningPriority
+    if (runningPriority > 0 && 3 <= runningPriority) {
+      return this.reply('已存在其他扫描任务在运行，请稍后再试')
     }
-    const r = await pushToAllWhitelistGroups(cards)
-    if (r.groups === 0) return this.reply('推送失败：没有可用的白名单群或消息发送失败')
-    return this.reply('扫描完成：直播中 ' + r.cards + ' 个，已推送 ' + r.groups + ' 个白名单群')
+    scheduleState.runningPriority = 3
+
+    try {
+      await this.reply('正在扫描订阅UP的直播状态，并向全部白名单群推送，请稍候...')
+      const { cards } = await scanLiveUPs()
+      if (cards.length === 0) {
+        return this.reply('当前订阅的UP均未开播')
+      }
+      // 指令扫描：尊重 cooldownHours 去重，避免强制重复推送
+      const filtered = cards.filter((c) => !isRoomInCooldown(c && c.roomId))
+      const skipped = cards.length - filtered.length
+      if (filtered.length === 0) {
+        return this.reply('直播中 ' + cards.length + ' 个，但均在冷却期内（' + getCooldownHours() + 'h），本次不推送')
+      }
+      const r = await pushToAllWhitelistGroups(filtered)
+      if (r && r.groups > 0) markRoomsPushed(filtered)
+      if (!r || r.groups === 0) return this.reply('推送失败：没有可用的白名单群或消息发送失败')
+      let extraMsg = ''
+      if (skipped > 0) extraMsg = '，冷却跳过 ' + skipped + ' 个（冷却 ' + getCooldownHours() + 'h）'
+      return this.reply('扫描完成：直播中 ' + cards.length + ' 个（本次推送 ' + filtered.length + ' 个' + extraMsg + '），已推送 ' + r.groups + ' 个白名单群')
+    } finally {
+      scheduleState.runningPriority = 0
+    }
   }
 
   async listSub (e) {
