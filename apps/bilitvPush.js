@@ -31,9 +31,12 @@ function libUrl (rel) {
 
 const plugin = (await import(libUrl('plugins/plugin.js'))).default
 const puppeteer = (await import(libUrl('puppeteer/puppeteer.js'))).default
+const cfg = (await import(libUrl('config/config.js'))).default
+const common = (await import(libUrl('common/common.js'))).default
 
 const {
   isModuleEnabled,
+  getModuleConfig,
   getString,
   getStringList,
   getNumber,
@@ -75,38 +78,27 @@ function getSubscribeUIDs () {
   return tokens.filter((s) => /^\d+$/.test(s))
 }
 
-function getWhitelistGroups () {
-  // 1) 若用户在本模块中显式填了群号，优先使用
-  const raw = cfgStr('whitelistGroups', '') || cfgList('whitelistGroups', [])
-  const tokens = Array.isArray(raw) ? raw.map((x) => String(x).trim()) : toTokens(raw)
-  const explicit = tokens.filter((s) => /^\d+$/.test(s))
-  if (explicit.length > 0) return explicit
-  // 2) 否则继承 Yunzai 全局 onlyGroupID（config.yaml 中配置）
-  try {
-    const globalCfg = (typeof Bot !== 'undefined' && Bot.config) ? Bot.config : null
-    if (globalCfg) {
-      const candidates = [
-        globalCfg.onlyGroupID,
-        globalCfg.onlygroupID,
-        globalCfg.group_id,
-        globalCfg.groupId
-      ]
-      for (const val of candidates) {
-        if (Array.isArray(val) && val.length > 0) {
-          return val.map((x) => String(x).trim()).filter((s) => /^\d+$/.test(s))
-        }
-        if (typeof val === 'string' || typeof val === 'number') {
-          const s = String(val).trim()
-          if (s) {
-            if (/^\d+$/.test(s)) return [s]
-            const arr = toTokens(s).filter((x) => /^\d+$/.test(x))
-            if (arr.length > 0) return arr
-          }
-        }
-      }
+// ====== 白名单群解析（与 dailyNews 保持一致） ======
+// 1) 优先读取模块配置 onlyGroupID（可通过锅巴面板设置）
+// 2) 回落到 Yunzai 全局 cfg.other.whiteGroup
+// 3) 如仍为空，则取 Bot.gl 中所有加入的群
+function getWhiteGroups () {
+  const m = getModuleConfig(_MODULE_KEY)
+  let groups = null
+  if (Array.isArray(m.onlyGroupID) && m.onlyGroupID.length > 0) {
+    groups = m.onlyGroupID.map((g) => Number(g)).filter((g) => g && !Number.isNaN(g))
+  }
+  if (!groups || groups.length === 0) {
+    let whiteGroup = cfg.other?.whiteGroup || []
+    if (!Array.isArray(whiteGroup)) whiteGroup = [String(whiteGroup)]
+    groups = whiteGroup.map((g) => Number(g)).filter((g) => g && !Number.isNaN(g))
+  }
+  if (!groups || groups.length === 0) {
+    if (Bot?.gl) {
+      groups = Array.from(Bot.gl.keys()).map((g) => Number(g))
     }
-  } catch (_) { /* ignore */ }
-  return []
+  }
+  return groups || []
 }
 
 function getAdminQQs () {
@@ -349,54 +341,6 @@ async function scanLiveUPs () {
   return { total: mids.length, cards }
 }
 
-// ===== 推送消息到指定群 =====
-async function pushToGroup (groupBot, groupId, msg) {
-  try {
-    if (!groupBot) return false
-    // Yunzai V3/V4 通用：通过 bot.pickGroup(groupId).sendMsg(msg) 或直接 bot.sendGroupMsg
-    const grp = typeof groupBot.pickGroup === 'function' ? groupBot.pickGroup(groupId) : null
-    if (grp && typeof grp.sendMsg === 'function') {
-      await grp.sendMsg(msg)
-      return true
-    }
-    if (typeof groupBot.sendGroupMsg === 'function') {
-      await groupBot.sendGroupMsg(groupId, msg)
-      return true
-    }
-  } catch (err) {
-    try { logger.error('[bilitvPush] 推送失败 group=' + groupId + ' err=' + (err && err.message)) } catch (_) { /* ignore */ }
-  }
-  return false
-}
-
-// 获取可用 Bot（优先取全局 Bot，若多实例则遍历）
-function getAllBots () {
-  const bots = []
-  try {
-    if (typeof Bot !== 'undefined') {
-      if (Bot.fl && typeof Bot.fl.forEach === 'function') {
-        Bot.fl.forEach((b) => bots.push(b))
-      }
-      if (bots.length === 0) bots.push(Bot)
-    }
-  } catch (_) { /* ignore */ }
-  try {
-    if (typeof Bot !== 'undefined' && typeof Bot.getFriendList === 'function') {
-      if (bots.length === 0) bots.push(Bot)
-    }
-  } catch (_) { /* ignore */ }
-  // 去重
-  const seen = new Set()
-  const out = []
-  for (const b of bots) {
-    const key = String((b.uin || b.uin === 0 ? b.uin : '') + (b.id || ''))
-    if (!key || seen.has(key)) continue
-    seen.add(key)
-    out.push(b)
-  }
-  return out
-}
-
 // 把「渲染图 + 多条直播信息文本」合成一条消息（数组形式，QQ 自动拼成图文混排）
 function buildLiveMessage (cards, img) {
   const segments = []
@@ -413,26 +357,29 @@ function buildLiveMessage (cards, img) {
   return segments
 }
 
+// 向白名单群批量推送（与 dailyNews.pushToGroups 一致：Bot.pickGroup(gid).sendMsg([msg])）
 async function pushToAllWhitelistGroups (cards) {
-  const groups = getWhitelistGroups()
+  const groups = getWhiteGroups()
   if (groups.length === 0 || cards.length === 0) return { groups: 0, cards: cards.length }
-  const bots = getAllBots()
-  if (bots.length === 0) return { groups: 0, cards: cards.length }
 
   const img = await renderCards(cards)
+  if (!img) return { groups: 0, cards: cards.length }
   const message = buildLiveMessage(cards, img)
 
-  let pushedGroups = 0
+  let success = 0
   for (const gid of groups) {
-    for (const bot of bots) {
-      const ok = await pushToGroup(bot, gid, message)
-      if (ok) {
-        pushedGroups++
-        break
-      }
+    try {
+      const group = Bot.pickGroup(Number(gid))
+      if (!group) continue
+      await group.sendMsg(message)
+      success++
+      await common.sleep(1500)
+    } catch (err) {
+      try { logger.error('[bilitvPush] 推送失败 group=' + gid + ' err=' + (err && err.message)) } catch (_) { /* ignore */ }
     }
   }
-  return { groups: pushedGroups, cards: cards.length }
+  logger.mark('[bilitvPush] 推送完成：直播中 ' + cards.length + ' 个，成功 ' + success + '/' + groups.length + ' 个群')
+  return { groups: success, cards: cards.length }
 }
 
 async function pushToCurrentGroup (e, cards) {
