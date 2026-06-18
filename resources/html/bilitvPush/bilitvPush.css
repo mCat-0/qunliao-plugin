@@ -1,0 +1,172 @@
+@font-face {
+  font-family: 'DouyinSans';
+  font-weight: bold;
+  src: url('../../fonts/DouyinSansBold.ttf') format('truetype');
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'DouyinSans', sans-serif;
+  color: #fff;
+  -webkit-font-smoothing: antialiased;
+}
+
+.container {
+  position: relative;
+  width: 1000px;
+  min-height: 400px;
+  padding: 40px;
+  overflow: hidden;
+  background: #1a1a24;
+}
+
+.bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: transparent;
+}
+/* 背景封面图：不透明，作为实际背景 */
+.bg-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+.bg-img.loaded { opacity: 1; }
+/* 彩色渐变滤镜层（叠加在封面之上），由脚本控制是否显示 */
+.bg-filter {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(14,165,233,0.45) 0%, rgba(99,102,241,0.40) 50%, rgba(236,72,153,0.40) 100%);
+  pointer-events: none;
+}
+/* 底部黑色蒙版（用于提升标题可读性），由脚本控制强度 */
+.bg-mask {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.55) 100%);
+  pointer-events: none;
+}
+.bg.no-bg .bg-img { display: none; }
+
+.card {
+  position: relative;
+  z-index: 1;
+  background: var(--glass-bg, rgba(0, 0, 0, 0.35));
+  border: 1px solid var(--glass-border, rgba(255,255,255,0.22));
+  border-radius: var(--glass-radius, 16px);
+  backdrop-filter: var(--glass-filter, blur(14px) saturate(140%));
+  -webkit-backdrop-filter: var(--glass-filter, blur(14px) saturate(140%));
+}
+
+.header {
+  padding: 18px 24px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.header .header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.header .header-right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  height: 88px;
+}
+.header .bili-logo {
+  height: 100%;
+  width: auto;
+  max-width: 180px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35));
+}
+.header .title {
+  font-family: 'DouyinSans', sans-serif;
+  font-weight: bold;
+  font-size: 44px;
+  letter-spacing: 2px;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.45);
+  line-height: 1.1;
+}
+.header .subtitle {
+  font-size: 18px;
+  opacity: 0.9;
+}
+
+.live-card {
+  display: flex;
+  padding: 16px;
+  margin-bottom: 18px;
+  gap: 20px;
+  align-items: center;
+}
+
+.live-card .cover {
+  width: 320px;
+  height: 180px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.08);
+}
+.live-card .cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.live-card .meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.live-card .meta .up-name {
+  font-family: 'DouyinSans', sans-serif;
+  font-weight: bold;
+  font-size: 28px;
+  color: #fff;
+}
+.live-card .meta .title {
+  font-size: 22px;
+  line-height: 1.4;
+  color: #fff;
+}
+.live-card .meta .area {
+  font-size: 16px;
+  color: #ffe08a;
+  opacity: 0.95;
+}
+.live-card .meta .url {
+  font-size: 14px;
+  color: #c7d2fe;
+  opacity: 0.75;
+  word-break: break-all;
+}
+
+.footer {
+  position: relative;
+  z-index: 1;
+  margin-top: 20px;
+  padding-top: 12px;
+  text-align: right;
+  font-size: 14px;
+  opacity: 0.75;
+}

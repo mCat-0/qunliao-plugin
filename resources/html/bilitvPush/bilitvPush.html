@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html;charset=utf-8" />
+    <link rel="stylesheet" type="text/css" href="{{pluResPath}}html/bilitvPush/bilitvPush.css" />
+  </head>
+  <body>
+    <div
+      class="container"
+      id="container"
+      data-glass-enabled="{{data.glassEnabled}}"
+      data-glass-blur="{{data.glassBlur}}"
+      data-glass-saturate="{{data.glassSaturate}}"
+      data-glass-opacity="{{data.glassOpacity}}"
+      data-glass-border="{{data.glassBorder}}"
+      data-glass-radius="{{data.glassRadius}}"
+      data-cover-filter-enabled="{{data.coverFilterEnabled}}"
+      data-cover-gradient="{{data.coverGradient}}"
+      data-cover-mask-opacity="{{data.coverMaskOpacity}}"
+    >
+      <div class="bg" id="bgBox">
+        <img
+          src="{{data.cover}}"
+          class="bg-img"
+          id="bgImg"
+        />
+        <div class="bg-filter" id="bgFilter"></div>
+        <div class="bg-mask"></div>
+      </div>
+
+      <div class="header card">
+        <div class="header-left">
+          <div class="title">直播推送</div>
+          <div class="subtitle">共 {{data.cardCount}} 位UP正在直播</div>
+        </div>
+        <div class="header-right">
+          <img src="{{pluResPath}}icons/Bilibili_logo_pink.svg" class="bili-logo" alt="Bilibili" />
+        </div>
+      </div>
+
+      {{each data.cards card}}
+      <div class="card live-card">
+        <div class="cover">
+          <img src="{{card.cover}}" referrerpolicy="no-referrer" />
+        </div>
+        <div class="meta">
+          <div class="up-name">{{card.upName}}</div>
+          <div class="title">{{card.title}}</div>
+          <div class="area">{{if card.areaName}}{{card.areaName}}{{/if}}</div>
+          <div class="url">{{card.url}}</div>
+        </div>
+      </div>
+      {{/each}}
+
+      <div class="footer">
+        <span>数据来源：bilibili.com · mCat 群聊插件</span>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        window.__H5Loaded = false;
+        var box = document.getElementById('container');
+        if (box) {
+          var enabled = box.getAttribute('data-glass-enabled') === 'true';
+          var blur = parseFloat(box.getAttribute('data-glass-blur')) || 0;
+          var sat = parseFloat(box.getAttribute('data-glass-saturate')) || 100;
+          var op = parseFloat(box.getAttribute('data-glass-opacity')) || 0.35;
+          var border = box.getAttribute('data-glass-border') || 'rgba(255,255,255,0.18)';
+          var radius = parseFloat(box.getAttribute('data-glass-radius')) || 16;
+          var bgValue = 'rgba(0,0,0,' + op.toFixed(3) + ')';
+          var filterValue = enabled ? ('blur(' + blur + 'px) saturate(' + sat + '%)') : 'none';
+
+          // 背景渐变滤镜（叠加在封面之上的彩色层）
+          // 黑色蒙版（bg-mask）保持独立，仅由 coverMaskOpacity 控制强度，始终生效
+          var coverFilterEnabled = box.getAttribute('data-cover-filter-enabled') !== 'false';
+          var coverGradient = box.getAttribute('data-cover-gradient') || '';
+          var coverMaskOpacity = box.getAttribute('data-cover-mask-opacity');
+          if (coverMaskOpacity === '' || coverMaskOpacity == null) coverMaskOpacity = '';
+
+          var cssText =
+            ':root{--glass-bg:' + bgValue +
+            ';--glass-border:' + border +
+            ';--glass-radius:' + radius + 'px' +
+            ';--glass-filter:' + filterValue +
+            ';}';
+          if (!coverFilterEnabled) {
+            // 关闭渐变滤镜：隐藏 bg-filter 彩色层，不影响黑蒙版
+            cssText += '.bg-filter{display:none!important;}';
+          } else {
+            // 开启渐变滤镜：bg-filter 显示自定义渐变
+            var gradient = coverGradient || 'linear-gradient(135deg, rgba(14,165,233,0.45) 0%, rgba(99,102,241,0.40) 50%, rgba(236,72,153,0.40) 100%)';
+            cssText += '.bg-filter{background:' + gradient + ' !important;}';
+          }
+          // 黑色蒙版强度始终可独立控制
+          if (coverMaskOpacity !== '') {
+            var maskOp = parseFloat(coverMaskOpacity);
+            if (!isNaN(maskOp)) {
+              cssText += '.bg-mask{background:linear-gradient(180deg, rgba(0,0,0,' + (maskOp * 0.1).toFixed(3) + ') 0%, rgba(0,0,0,' + maskOp.toFixed(3) + ') 100%);}';
+            }
+          }
+          var styleNode = document.createElement('style');
+          styleNode.appendChild(document.createTextNode(cssText));
+          document.head.appendChild(styleNode);
+        }
+        function markReady () {
+          if (window.__H5Loaded) return;
+          window.__H5Loaded = true;
+          if (box) box.classList.add('h5-loaded');
+        }
+
+        var img = document.getElementById('bgImg');
+        if (img) {
+          if (img.complete) { img.classList.add('loaded'); markReady(); }
+          else {
+            img.addEventListener('load', function () { img.classList.add('loaded'); markReady(); }, { once: true });
+            img.addEventListener('error', function () {
+              var bgBox = document.getElementById('bgBox');
+              if (bgBox) bgBox.classList.add('no-bg');
+              markReady();
+            }, { once: true });
+          }
+        } else markReady();
+
+        setTimeout(markReady, 2000);
+      })();
+    </script>
+  </body>
+</html>

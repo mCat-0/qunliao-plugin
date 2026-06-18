@@ -64,6 +64,7 @@ const MODULE_NAMES = {
   KFCV50: 'KFC 疯狂星期四',
   historyToday: '历史上的今天',
   marriageCertificate: '结婚证生成器',
+  bilitvPush: 'B站直播推送',
   help: '群聊帮助'
 }
 
@@ -164,6 +165,15 @@ function getAllCommands () {
       hasAdmin: false,
       commands: [
         { cmd: '#天气 / #城市天气', desc: '查询对应城市天气信息' }
+      ]
+    },
+    {
+      moduleName: 'B站直播推送',
+      hasAdmin: true,
+      commands: [
+        { cmd: '#B站推送', desc: '立即查询一次订阅列表，并将直播中UP推送至当前群', admin: true },
+        { cmd: '#B站全部推送', desc: '立即查询一次订阅列表，并将直播中UP推送至所有白名单群', admin: true },
+        { cmd: '#B站订阅列表', desc: '查看当前订阅的 B 站 UP 列表', admin: true }
       ]
     },
     {

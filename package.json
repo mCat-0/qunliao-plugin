@@ -1,7 +1,7 @@
 {
   "name": "yunzai-qunliao-plugin",
-  "version": "1.0.0",
-  "description": "QunLiao Plugin - Integrated Yunzai-Bot plugin providing daily group chat interactive features (morning news, hot search, weather, poison soup, dog diary, cos images, KFC, good morning/night, this day in history)",
+  "version": "1.2.9",
+  "description": "QunLiao Plugin - Integrated Yunzai-Bot plugin providing daily group chat interactive features (morning news, hot search, weather, poison soup, dog diary, cos images, KFC, good morning/night, this day in history, Bilibili live push)",
   "main": "index.js",
   "type": "module",
   "keywords": ["yunzai", "yunzai-bot", "plugin", "qunliao", "group-chat"],

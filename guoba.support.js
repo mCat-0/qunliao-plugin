@@ -521,6 +521,127 @@ export function supportGuoba() {
         },
 
         // ============================================================
+        // B站直播推送
+        // ============================================================
+        {
+          label: 'B站直播推送',
+          component: 'SOFT_GROUP_BEGIN'
+        },
+        {
+          component: "Divider",
+          label: "B站直播推送",
+          componentProps: { orientation: "left", plain: true }
+        },
+        {
+          field: "bilitvPush.enabled",
+          label: "启用「B站直播推送」",
+          component: "Switch"
+        },
+        {
+          field: "bilitvPush.subscribeUIDs",
+          label: "订阅的 B站 UID",
+          bottomHelpMessage: "填 mid 纯数字，多个用逗号/空格/换行分隔；示例：401742377, 1636034895",
+          component: "Input"
+        },
+        {
+          field: "bilitvPush.cronHours",
+          label: "定时扫描小时(0~23)",
+          bottomHelpMessage: "每天这些整点各扫描一次；示例：6,11,12,18,20,22",
+          component: "Input"
+        },
+        {
+          field: "bilitvPush.scanIntervalHours",
+          label: "兜底扫描间隔(小时)",
+          bottomHelpMessage: "每 N 小时执行一次兜底扫描；默认 8 小时",
+          component: "InputNumber",
+          componentProps: { min: 1, max: 240, step: 1, placeholder: "8" }
+        },
+        {
+          field: "bilitvPush.nightScanEnabled",
+          label: "夜间是否扫描",
+          bottomHelpMessage: "关闭后，在夜间时段内不扫描；夜间时段可在下方自定义",
+          component: "Switch",
+          componentProps: { checkedValue: true, uncheckedValue: false }
+        },
+        {
+          field: "bilitvPush.nightStartHour",
+          label: "夜间开始(24h)",
+          bottomHelpMessage: "从该小时起算夜间；默认 23",
+          component: "InputNumber",
+          componentProps: { min: 0, max: 23, step: 1, placeholder: "23" }
+        },
+        {
+          field: "bilitvPush.nightEndHour",
+          label: "夜间结束(24h)",
+          bottomHelpMessage: "到该小时为止算夜间；默认 8；结束必须晚于开始",
+          component: "InputNumber",
+          componentProps: { min: 0, max: 23, step: 1, placeholder: "8" }
+        },
+        {
+          field: "bilitvPush.glassEnabled",
+          label: "启用毛玻璃",
+          bottomHelpMessage: "关闭后内容区退化为纯色半透明卡片",
+          component: "Switch",
+          componentProps: { checkedValue: true, uncheckedValue: false }
+        },
+        {
+          field: "bilitvPush.glassBlur",
+          label: "模糊半径(px)",
+          bottomHelpMessage: "值越大越模糊，建议 0~24",
+          component: "InputNumber",
+          componentProps: { min: 0, max: 60, step: 1, placeholder: "3" }
+        },
+        {
+          field: "bilitvPush.glassSaturate",
+          label: "饱和度(%)",
+          bottomHelpMessage: "100 为不变，增大可让底色更鲜艳，建议 100~180",
+          component: "InputNumber",
+          componentProps: { min: 0, max: 300, step: 10, placeholder: "140" }
+        },
+        {
+          field: "bilitvPush.glassOpacity",
+          label: "卡片不透明度",
+          bottomHelpMessage: "0~1，越大越不透明，建议 0.25~0.55",
+          component: "InputNumber",
+          componentProps: { min: 0, max: 1, step: 0.05, placeholder: "0.35" }
+        },
+        {
+          field: "bilitvPush.glassBorder",
+          label: "边框颜色",
+          bottomHelpMessage: "支持 #rrggbb / rgba(...)",
+          component: "Input",
+          componentProps: { placeholder: "rgba(255,255,255,0.18)" }
+        },
+        {
+          field: "bilitvPush.glassRadius",
+          label: "圆角(px)",
+          bottomHelpMessage: "卡片圆角大小，建议 8~24",
+          component: "InputNumber",
+          componentProps: { min: 0, max: 48, step: 2, placeholder: "16" }
+        },
+        {
+          field: "bilitvPush.coverFilterEnabled",
+          label: "背景渐变滤镜",
+          bottomHelpMessage: "关闭后封面图直接显示，不叠加彩色渐变；默认开启",
+          component: "Switch",
+          componentProps: { checkedValue: true, uncheckedValue: false }
+        },
+        {
+          field: "bilitvPush.coverGradient",
+          label: "自定义渐变",
+          bottomHelpMessage: "任何合法 CSS background，如 linear-gradient / radial-gradient；留空使用默认",
+          component: "Input",
+          componentProps: { placeholder: "linear-gradient(135deg, rgba(14,165,233,0.45) 0%, rgba(99,102,241,0.40) 50%, rgba(236,72,153,0.40) 100%)" }
+        },
+        {
+          field: "bilitvPush.coverMaskOpacity",
+          label: "底部蒙版强度",
+          bottomHelpMessage: "0~1，越大底部越暗，便于顶部标题文字显示；默认 0.55",
+          component: "InputNumber",
+          componentProps: { min: 0, max: 1, step: 0.05, placeholder: "0.55" }
+        },
+
+        // ============================================================
         // 毒鸡汤
         // ============================================================
         {

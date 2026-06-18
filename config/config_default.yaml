@@ -115,6 +115,45 @@ weather:
   onlyGroupID: []
 
 # ------------------------------------------------------------
+# B站直播推送 Bilibili Live Push
+# ------------------------------------------------------------
+bilitvPush:
+  # 是否启用模块
+  enabled: true
+  # 订阅的 B站 UID（mid），支持逗号/空格/换行分隔；示例：401742377, 1636034895
+  # 验证方法：浏览器打开 https://space.bilibili.com/<UID>
+  subscribeUIDs: "401742377, 1636034895, 1340190821, 3546886017387331"
+  # 定时扫描小时（0~23），逗号或空格分隔；示例：6, 11, 12, 18, 20, 22
+  cronHours: "6, 11, 12, 18, 20, 22"
+  # 兜底扫描间隔（小时），确保即便 cron 小时都没触发，也会定期扫描一次
+  scanIntervalHours: 8
+  # 推送目标群：留空则继承 Yunzai 的全局 onlyGroupID；填数字群号逗号分隔
+  whitelistGroups: ""
+  # 允许执行 #B站推送 / #B站全部推送 / #群聊插件版本 的额外管理员 QQ
+  extraAdminQQ: ""
+  # 夜间是否扫描：false 表示在 [nightStartHour, nightEndHour) 期间不扫描
+  nightScanEnabled: false
+  # 夜间开始小时（0~23）
+  nightStartHour: 23
+  # 夜间结束小时（0~23），必须不等于 nightStartHour，结束时间可跨 0 点
+  nightEndHour: 8
+  # ---------- 毛玻璃卡片 ----------
+  glassEnabled: true
+  glassBlur: 3
+  glassSaturate: 140
+  glassOpacity: 0.35
+  glassBorder: "rgba(255,255,255,0.18)"
+  glassRadius: 16
+  # ---------- 背景渐变滤镜（叠加在封面之上） ----------
+  # 是否启用背景渐变滤镜（关闭后封面直接显示，不叠加彩色渐变）
+  coverFilterEnabled: true
+  # 自定义渐变（任何合法 CSS background 值，如 linear-gradient / radial-gradient；留空使用默认）
+  # 示例：linear-gradient(135deg, rgba(251, 113, 133, 0.40) 0%, rgba(88, 28, 135, 0.35) 100%)
+  coverGradient: "linear-gradient(135deg, rgba(14,165,233,0.45) 0%, rgba(99,102,241,0.40) 50%, rgba(236,72,153,0.40) 100%)"
+  # 渐变末端黑色蒙版强度（0~1，越大底部越暗，便于文字显示）
+  coverMaskOpacity: 0.55
+
+# ------------------------------------------------------------
 # 毒鸡汤 Dujitang
 # ------------------------------------------------------------
 dujitang:
