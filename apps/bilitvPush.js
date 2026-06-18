@@ -393,17 +393,25 @@ async function pushToCurrentGroup (e, cards) {
   return true
 }
 
-// ===== 定时器 =====
-// 约定：使用 cron 风格的小时数组 + 基于 interval 的兜底扫描。
-// - 启动时立即排一次（可通过配置控制是否立即扫描）
-// - 用 setInterval 每 60 秒检查一次当前时间是否命中指定小时
-// - 为避免重复推送：用 "当天该小时已推送过" 的状态记录
+// ===== 定时器 & 去重 =====
+// - 启动时仅注册一次 setInterval（单例保护）
+// - 每次调度使用 isRunning 标志，避免上一次未完成时再次触发
+// - 对每个直播间（roomId）做冷却去重：同一 roomId 在 cooldownHours 内只推送一次
 let scheduleState = {
   lastPushAt: 0,
   pushedTodayHours: new Set(),
   currentDateKey: '',
   intervalTimer: null,
-  startedAt: 0
+  startedAt: 0,
+  isRunning: false,
+  pushedRoomIds: new Map() // Map<roomId, lastPushedAtMs>
+}
+
+// 冷却时间（小时）：默认 12h；可通过配置项 cooldownHours 调整
+function getCooldownHours () {
+  const v = cfgNum('cooldownHours', 12)
+  if (!isFinite(v) || v < 0) return 12
+  return v
 }
 
 function nowHH () { return new Date().getHours() }
@@ -412,23 +420,57 @@ function todayKey () {
   return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate()
 }
 
+// 判断某个 roomId 是否在冷却期内（冷却期内不重复推送）
+function isRoomInCooldown (roomId) {
+  if (!roomId) return false
+  const cooldownMs = getCooldownHours() * 60 * 60 * 1000
+  if (cooldownMs <= 0) return false
+  const last = scheduleState.pushedRoomIds.get(String(roomId))
+  if (!last) return false
+  return (Date.now() - last) < cooldownMs
+}
+
+// 标记一批 roomId 为已推送（仅在推送成功后调用）
+function markRoomsPushed (cards) {
+  const now = Date.now()
+  for (const c of cards) {
+    if (c && c.roomId) scheduleState.pushedRoomIds.set(String(c.roomId), now)
+  }
+  // 定期清理：超过冷却时间的条目可移除（保守 3 天上限，避免内存无限增长）
+  const maxAge = Math.max(getCooldownHours(), 72) * 60 * 60 * 1000
+  for (const [rid, t] of scheduleState.pushedRoomIds.entries()) {
+    if (now - t > maxAge) scheduleState.pushedRoomIds.delete(rid)
+  }
+}
+
 async function doScheduledPush () {
   if (!isModuleEnabled(_MODULE_KEY)) return
   if (isScheduleBlocked()) return
+  if (scheduleState.isRunning) return      // 防止上一轮没完成就再次并发
+  scheduleState.isRunning = true
   try {
     const { cards } = await scanLiveUPs()
     if (cards.length === 0) return
-    const r = await pushToAllWhitelistGroups(cards)
-    logger.mark('[bilitvPush] 定时扫描完成：直播中 ' + r.cards + ' 个，已推送 ' + r.groups + ' 个群')
+    // 过滤：去掉仍在冷却期的直播间，避免同一直播反复推送
+    const filtered = cards.filter((c) => !isRoomInCooldown(c && c.roomId))
+    if (filtered.length === 0) {
+      logger.mark('[bilitvPush] 直播中 ' + cards.length + ' 个，但均在冷却期内，跳过')
+      return
+    }
+    const r = await pushToAllWhitelistGroups(filtered)
+    if (r && r.groups > 0) markRoomsPushed(filtered)
+    logger.mark('[bilitvPush] 定时扫描完成：直播中 ' + cards.length + ' 个（本次推送 ' + filtered.length + ' 个，冷却跳过 ' + (cards.length - filtered.length) + ' 个），已推送 ' + (r ? r.groups : 0) + ' 个群')
   } catch (err) {
     try { logger.error('[bilitvPush] 定时扫描异常: ' + (err && err.message)) } catch (_) { /* ignore */ }
+  } finally {
+    scheduleState.isRunning = false
   }
 }
 
 function ensureScheduleStart () {
   if (scheduleState.intervalTimer) return
   scheduleState.startedAt = Date.now()
-  // 每 60 秒检查一次（每小时最多触发一次；夜间时段会自动跳过）
+  // 每 60 秒检查一次：命中 cronHours 整点 或 达到 scanIntervalHours 兜底间隔
   scheduleState.intervalTimer = setInterval(() => {
     try {
       const key = todayKey()
@@ -437,14 +479,13 @@ function ensureScheduleStart () {
         scheduleState.pushedTodayHours = new Set()
       }
       const hh = nowHH()
-      // 夜间时段：直接跳过，不清空 pushedTodayHours，避免跨零点后重复推送
+      // 夜间时段：直接跳过（不影响 lastPushAt，不影响 pushedTodayHours 的清除）
       if (isScheduleBlocked()) return
       const cronHours = getCronHours()
       if (cronHours.includes(hh) && !scheduleState.pushedTodayHours.has(hh)) {
         scheduleState.pushedTodayHours.add(hh)
         doScheduledPush()
       }
-      // 基于 interval 的兜底扫描：每隔 scanIntervalHours 小时无条件扫描一次
       const intervalMs = getIntervalHours() * 60 * 60 * 1000
       if (Date.now() - scheduleState.lastPushAt >= intervalMs) {
         scheduleState.lastPushAt = Date.now()
@@ -453,7 +494,7 @@ function ensureScheduleStart () {
     } catch (_) { /* ignore */ }
   }, 60 * 1000)
 
-  // 启动时立即执行一次（仅一次，避免频繁；若当前处于夜间则跳过）
+  // 启动时立即执行一次（仅一次；若当前处于夜间或模块关闭则内部自动返回）
   setTimeout(() => doScheduledPush(), 3000)
 }
 
