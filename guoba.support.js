@@ -746,7 +746,7 @@ export function supportGuoba() {
         {
           field: "cosImage.apiUrl",
           label: "COS 图片 API",
-          bottomHelpMessage: "返回一张随机 COS 图片的接口地址",
+          bottomHelpMessage: "返回一张随机 COS 图片的接口地址；支持多个，用英文逗号分隔，随机选取，失败自动回退",
           component: "Input"
         },
         {
@@ -782,7 +782,7 @@ export function supportGuoba() {
         {
           field: "jkImage.apiUrl",
           label: "JK 图片 API",
-          bottomHelpMessage: "返回一张随机 JK 图片的接口地址",
+          bottomHelpMessage: "返回一张随机 JK 图片的接口地址；支持多个，用英文逗号分隔，随机选取，失败自动回退",
           component: "Input"
         },
         {
@@ -818,7 +818,7 @@ export function supportGuoba() {
         {
           field: "heisiImage.apiUrl",
           label: "黑丝图片 API",
-          bottomHelpMessage: "返回一张随机黑丝图片的接口地址",
+          bottomHelpMessage: "返回一张随机黑丝图片的接口地址；支持多个，用英文逗号分隔，随机选取，失败自动回退",
           component: "Input"
         },
         {
@@ -854,7 +854,7 @@ export function supportGuoba() {
         {
           field: "baisiImage.apiUrl",
           label: "白丝图片 API",
-          bottomHelpMessage: "返回一张随机白丝图片的接口地址",
+          bottomHelpMessage: "返回一张随机白丝图片的接口地址；支持多个，用英文逗号分隔，随机选取，失败自动回退",
           component: "Input"
         },
         {

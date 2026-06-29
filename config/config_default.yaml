@@ -185,7 +185,7 @@ dogDiary:
 cosImage:
   # 是否启用模块
   enabled: true
-  # 数据接口
+  # 数据接口（支持多个，用英文逗号分隔；随机选取，失败自动回退到下一个）
   apiUrl: "https://v2.xxapi.cn/api/yscos"
   # 生效的群列表，留空则所有群生效
   onlyGroupID: []
@@ -196,7 +196,7 @@ cosImage:
 jkImage:
   # 是否启用模块
   enabled: true
-  # 数据接口
+  # 数据接口（支持多个，用英文逗号分隔；随机选取，失败自动回退到下一个）
   apiUrl: "https://api.ruseo.cn/api/jk"
   # 生效的群列表，留空则所有群生效
   onlyGroupID: []
@@ -207,8 +207,8 @@ jkImage:
 heisiImage:
   # 是否启用模块
   enabled: true
-  # 数据接口
-  apiUrl: "https://api.ruseo.cn/api/heisi"
+  # 数据接口（支持多个，用英文逗号分隔；随机选取，失败自动回退到下一个）
+  apiUrl: "http://api.yujn.cn/api/heisi.php, https://api.ruseo.cn/api/heisi, https://api.suyanw.cn/api/hs.php"
   # 生效的群列表，留空则所有群生效
   onlyGroupID: []
 
@@ -218,7 +218,7 @@ heisiImage:
 baisiImage:
   # 是否启用模块
   enabled: true
-  # 数据接口
+  # 数据接口（支持多个，用英文逗号分隔；随机选取，失败自动回退到下一个）
   apiUrl: "https://api.ruseo.cn/api/baisi"
   # 生效的群列表，留空则所有群生效
   onlyGroupID: []
