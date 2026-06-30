@@ -42,6 +42,7 @@ function findStringInObject (obj, depth = 0) {
     for (const key of Object.keys(obj)) {
       if (IMAGE_URL_KEYS.includes(key)) continue
       const v = obj[key]
+      if (typeof v === 'string' && isHttpUrl(v)) return v
       if (typeof v === 'object') {
         const r = findStringInObject(v, depth + 1)
         if (r) return r
@@ -78,11 +79,16 @@ export function extractImageUrl (raw) {
     }
     for (const key of IMAGE_ARRAY_KEYS) {
       const v = raw[key]
+      if (isHttpUrl(v)) return v
       if (Array.isArray(v) && v.length > 0) {
         for (const item of v) {
           const r = extractImageUrl(item)
           if (r) return r
         }
+      }
+      if (v && typeof v === 'object') {
+        const r = extractImageUrl(v)
+        if (r) return r
       }
     }
     const deep = findStringInObject(raw, 0)
