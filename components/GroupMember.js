@@ -247,7 +247,6 @@ export async function getGroupMemberInfo (e, qq) {
   }
 
   const bot = _getBot(e)
-  const gid = _getGroupId(e)
   if (bot && gid) {
     const m4 = await _getMemberByDirectCall(bot, gid, qqStr)
     if (m4) {
