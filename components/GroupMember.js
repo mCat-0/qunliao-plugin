@@ -2,8 +2,9 @@ function _log (level, ...args) {
   try {
     const g = globalThis
     const logger = g.logger || g.log || g.console
-    if (logger && typeof logger[level] === 'function') {
-      logger[level]('[GroupMember]', ...args)
+    const lv = level === 'debug' ? 'mark' : level
+    if (logger && typeof logger[lv] === 'function') {
+      logger[lv]('[GroupMember]', ...args)
     }
   } catch (_) { /* noop */ }
 }
@@ -93,8 +94,35 @@ async function _getMemberByPick (group, qqStr) {
     if (typeof group[fn] !== 'function') continue
     try {
       const member = await group[fn](qqStr)
-      if (member) return member
-    } catch (_) {}
+      if (!member) continue
+      const info = await _resolveMemberInfo(member)
+      if (info) {
+        _log('debug', `group.${fn}() + getInfo 成功: qq=${qqStr}`)
+        return info
+      }
+      return member
+    } catch (err) {
+      _log('debug', `group.${fn}() err=${err?.message || err}`)
+    }
+  }
+  return null
+}
+
+async function _resolveMemberInfo (member) {
+  if (!member) return null
+  if (member.info && typeof member.info === 'object' && !member.info.then) {
+    return member.info
+  }
+  const getInfoFns = ['getInfo', 'get_info', 'fetchInfo', 'loadInfo', 'queryInfo']
+  for (const fn of getInfoFns) {
+    if (typeof member[fn] === 'function') {
+      try {
+        const info = await member[fn]()
+        if (info) return info
+      } catch (err) {
+        _log('debug', `member.${fn}() err=${err?.message || err}`)
+      }
+    }
   }
   return null
 }
@@ -186,6 +214,8 @@ export async function getGroupMemberInfo (e, qq) {
   if (!qq) return null
   const qqStr = String(qq)
   const group = _getGroupObj(e)
+  const gid = _getGroupId(e)
+  _log('mark', `查询群名片 qq=${qqStr} gid=${gid || '无'} e.group=${!!e?.group}`)
   const groupNames = []
   if (group) {
     const gnames = ['name', 'group_name', 'groupName', 'groupname', 'title', 'group_title']
@@ -199,19 +229,19 @@ export async function getGroupMemberInfo (e, qq) {
     const m1 = await _getMemberByPick(group, qqStr)
     if (m1) {
       const name = _extractName(m1, groupNames)
-      _log('debug', `pickMember 成功: qq=${qqStr} name=${name || '(无)'}`)
+      _log('mark', `pickMember 成功: qq=${qqStr} name=${name || '(空)'}`)
       return { member: m1, name }
     }
     const m2 = _getMemberFromMembersMap(group, qqStr)
     if (m2) {
       const name = _extractName(m2, groupNames)
-      _log('debug', `members Map 成功: qq=${qqStr} name=${name || '(无)'}`)
+      _log('mark', `members Map 成功: qq=${qqStr} name=${name || '(空)'}`)
       return { member: m2, name }
     }
     const m3 = _getMemberFromList(group, qqStr)
     if (m3) {
       const name = _extractName(m3, groupNames)
-      _log('debug', `memberList 成功: qq=${qqStr} name=${name || '(无)'}`)
+      _log('mark', `memberList 成功: qq=${qqStr} name=${name || '(空)'}`)
       return { member: m3, name }
     }
   }
@@ -222,7 +252,7 @@ export async function getGroupMemberInfo (e, qq) {
     const m4 = await _getMemberByDirectCall(bot, gid, qqStr)
     if (m4) {
       const name = _extractName(m4, groupNames)
-      _log('debug', `Bot 直接调用成功: qq=${qqStr} name=${name || '(无)'}`)
+      _log('mark', `Bot 直接调用成功: qq=${qqStr} name=${name || '(空)'}`)
       return { member: m4, name }
     }
     if (!group) {
@@ -240,7 +270,7 @@ export async function getGroupMemberInfo (e, qq) {
         const m5 = await _getMemberByPick(groupObj, qqStr)
         if (m5) {
           const name = _extractName(m5, groupNames)
-          _log('debug', `Bot.pickGroup + pickMember 成功: qq=${qqStr} name=${name || '(无)'}`)
+          _log('mark', `Bot.pickGroup + pickMember 成功: qq=${qqStr} name=${name || '(空)'}`)
           return { member: m5, name }
         }
       }
@@ -249,11 +279,11 @@ export async function getGroupMemberInfo (e, qq) {
 
   const atName = _getNameFromAtMessage(e, qqStr)
   if (atName) {
-    _log('debug', `消息 at 段获取显示名: qq=${qqStr} name=${atName}`)
+    _log('mark', `消息 at 段获取显示名: qq=${qqStr} name=${atName}`)
     return { member: null, name: atName }
   }
 
-  _log('debug', `未能获取群成员信息: qq=${qqStr}`)
+  _log('mark', `未能获取群成员信息: qq=${qqStr}，回落 QQ 号`)
   return null
 }
 
